@@ -28,6 +28,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             handler: { [weak self] in self?.startWindowCapture() }
         )
 
+        // Cmd+Shift+6 for freeze & capture (kVK_ANSI_6)
+        HotkeyService.shared.register(
+            keyCode: UInt32(kVK_ANSI_6),
+            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
+            handler: { [weak self] in self?.startFreezeCapture() }
+        )
     }
 
     func startAreaCapture() {
@@ -87,4 +93,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func startFreezeCapture() {
+        FreezeScreenOverlay.beginFrozenCapture { rect in
+            guard let rect = rect else { return }
+            Task {
+                do {
+                    let cgImage = try await CaptureService.shared.captureArea(rect)
+                    let nsImage = NSImage(
+                        cgImage: cgImage,
+                        size: NSSize(width: cgImage.width, height: cgImage.height)
+                    )
+                    await MainActor.run {
+                        QuickAccessOverlay.show(image: nsImage)
+                    }
+                } catch {
+                    print("Freeze capture failed: \(error)")
+                }
+            }
+        }
+    }
 }

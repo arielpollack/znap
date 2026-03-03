@@ -9,6 +9,7 @@ struct ZnapApp: App {
             Button("Capture Area (\u{2318}\u{21e7}4)") { appDelegate.startAreaCapture() }
             Button("Capture Fullscreen (\u{2318}\u{21e7}3)") { appDelegate.startFullscreenCapture() }
             Button("Capture Window (\u{2318}\u{21e7}5)") { appDelegate.startWindowCapture() }
+            Button("Freeze & Capture (\u{2318}\u{21e7}6)") { appDelegate.startFreezeCapture() }
             Divider()
             Text("Znap v0.1.0").foregroundColor(.secondary)
             Divider()
