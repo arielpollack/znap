@@ -19,7 +19,8 @@ enum AnnotationHitTesting {
         switch annotation.type {
         case .arrow:
             let effectiveTolerance = tolerance + annotation.strokeWidth / 2
-            if let cp = annotation.curveControlPoint {
+            if let passThrough = annotation.curveControlPoint {
+                let cp = AnnotationRenderer.bezierControl(from: passThrough, start: annotation.startPoint, end: annotation.endPoint)
                 return pointToQuadBezierDistance(point, from: annotation.startPoint, control: cp, to: annotation.endPoint) <= effectiveTolerance
             }
             return pointToSegmentDistance(point, from: annotation.startPoint, to: annotation.endPoint) <= effectiveTolerance

@@ -117,16 +117,20 @@ enum AnnotationRenderer {
 
         // Shaft
         ctx.move(to: start)
-        if let cp = annotation.curveControlPoint {
+        let bezierCP: CGPoint?
+        if let passThrough = annotation.curveControlPoint {
+            let cp = bezierControl(from: passThrough, start: start, end: end)
             ctx.addQuadCurve(to: end, control: cp)
+            bezierCP = cp
         } else {
             ctx.addLine(to: end)
+            bezierCP = nil
         }
         ctx.strokePath()
 
         // Arrowhead — compute angle from tangent direction at endpoint.
         let angle: CGFloat
-        if let cp = annotation.curveControlPoint {
+        if let cp = bezierCP {
             angle = atan2(end.y - cp.y, end.x - cp.x)
         } else {
             angle = atan2(end.y - start.y, end.x - start.x)
@@ -358,6 +362,18 @@ enum AnnotationRenderer {
     }
 
     // MARK: - Helpers
+
+    /// Computes the actual quadratic bezier control point from a pass-through point.
+    ///
+    /// The stored `curveControlPoint` represents where the curve passes through at t=0.5.
+    /// A quadratic bezier at t=0.5 is `0.25*P0 + 0.5*P1 + 0.25*P2`, so solving for P1:
+    /// `P1 = 2*passThrough - 0.5*start - 0.5*end`.
+    static func bezierControl(from passThrough: CGPoint, start: CGPoint, end: CGPoint) -> CGPoint {
+        CGPoint(
+            x: 2 * passThrough.x - 0.5 * start.x - 0.5 * end.x,
+            y: 2 * passThrough.y - 0.5 * start.y - 0.5 * end.y
+        )
+    }
 
     /// Constructs a normalised (positive width/height) rectangle from two
     /// arbitrary corner points.

@@ -403,10 +403,14 @@ struct AnnotationCanvasView: View {
         // Shaft
         var shaft = Path()
         shaft.move(to: start)
-        if let cp = annotation.curveControlPoint {
+        let bezierCP: CGPoint?
+        if let passThrough = annotation.curveControlPoint {
+            let cp = AnnotationRenderer.bezierControl(from: passThrough, start: start, end: end)
             shaft.addQuadCurve(to: end, control: cp)
+            bezierCP = cp
         } else {
             shaft.addLine(to: end)
+            bezierCP = nil
         }
         context.stroke(
             shaft,
@@ -416,7 +420,7 @@ struct AnnotationCanvasView: View {
 
         // Arrowhead — compute angle from tangent direction at endpoint.
         let angle: CGFloat
-        if let cp = annotation.curveControlPoint {
+        if let cp = bezierCP {
             angle = atan2(end.y - cp.y, end.x - cp.x)
         } else {
             angle = atan2(end.y - start.y, end.x - start.x)
