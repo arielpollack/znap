@@ -183,6 +183,12 @@ struct AnnotationEditorView: View {
         .onReceive(NotificationCenter.default.publisher(for: .annotationCopy)) { _ in copyToClipboard() }
         .onReceive(NotificationCenter.default.publisher(for: .annotationSave)) { _ in save() }
         .onReceive(NotificationCenter.default.publisher(for: .annotationDelete)) { _ in deleteSelectedAnnotation() }
+        .onReceive(NotificationCenter.default.publisher(for: .annotationSelectTool)) { notification in
+            if let rawValue = notification.userInfo?["tool"] as? String,
+               let tool = AnnotationDocument.AnnotationType(rawValue: rawValue) {
+                selectedTool = tool
+            }
+        }
     }
 
     // MARK: - Annotation Commit

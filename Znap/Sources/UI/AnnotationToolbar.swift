@@ -30,21 +30,21 @@ struct AnnotationToolbar: View {
 
     // MARK: - Tool Definitions
 
-    /// Maps each annotation type to a system image name.
-    private static let tools: [(AnnotationDocument.AnnotationType, String)] = [
-        (.arrow, "arrow.up.right"),
-        (.rectangle, "rectangle"),
-        (.filledRectangle, "rectangle.fill"),
-        (.ellipse, "circle"),
-        (.line, "line.diagonal"),
-        (.text, "textformat"),
-        (.counter, "number.circle"),
-        (.pixelate, "square.grid.3x3"),
-        (.blur, "drop"),
-        (.spotlight, "sun.max"),
-        (.highlighter, "highlighter"),
-        (.pencil, "pencil"),
-        (.handwriting, "pencil.tip"),
+    /// Maps each annotation type to a system image name and keyboard shortcut.
+    private static let tools: [(AnnotationDocument.AnnotationType, String, String)] = [
+        (.arrow, "arrow.up.right", "A"),
+        (.rectangle, "rectangle", "R"),
+        (.filledRectangle, "rectangle.fill", "F"),
+        (.ellipse, "circle", "O"),
+        (.line, "line.diagonal", "L"),
+        (.text, "textformat", "T"),
+        (.counter, "number.circle", "N"),
+        (.pixelate, "square.grid.3x3", "X"),
+        (.blur, "drop", "B"),
+        (.spotlight, "sun.max", "S"),
+        (.highlighter, "highlighter", "H"),
+        (.pencil, "pencil", "P"),
+        (.handwriting, "pencil.tip", "W"),
     ]
 
     // MARK: - Colour Palette
@@ -67,7 +67,7 @@ struct AnnotationToolbar: View {
         VStack(spacing: 0) {
             // Row 1: Tools
             HStack(spacing: 4) {
-                ForEach(Self.tools, id: \.0) { tool, icon in
+                ForEach(Self.tools, id: \.0) { tool, icon, shortcut in
                     Button {
                         selectedTool = tool
                     } label: {
@@ -81,7 +81,7 @@ struct AnnotationToolbar: View {
                             : Color.clear
                     )
                     .cornerRadius(6)
-                    .help(tool.rawValue)
+                    .help("\(tool.rawValue) (\(shortcut))")
                 }
 
                 Spacer()

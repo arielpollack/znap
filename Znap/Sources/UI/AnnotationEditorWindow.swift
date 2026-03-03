@@ -100,7 +100,42 @@ final class AnnotationEditorWindow: NSPanel {
             }
         }
 
+        // Single-key tool shortcuts (only when no text field is active).
+        if flags.isEmpty, let key = event.charactersIgnoringModifiers?.lowercased(),
+           !(firstResponder is NSTextView) {
+            if let tool = Self.toolForKey(key) {
+                NotificationCenter.default.post(
+                    name: .annotationSelectTool,
+                    object: nil,
+                    userInfo: ["tool": tool.rawValue]
+                )
+                return true
+            }
+        }
+
         return super.performKeyEquivalent(with: event)
+    }
+
+    // MARK: - Tool Key Mapping
+
+    /// Maps single-key presses to annotation tool types.
+    private static func toolForKey(_ key: String) -> AnnotationDocument.AnnotationType? {
+        switch key {
+        case "a": return .arrow
+        case "r": return .rectangle
+        case "f": return .filledRectangle
+        case "o": return .ellipse
+        case "l": return .line
+        case "t": return .text
+        case "n": return .counter
+        case "x": return .pixelate
+        case "b": return .blur
+        case "s": return .spotlight
+        case "h": return .highlighter
+        case "p": return .pencil
+        case "w": return .handwriting
+        default:  return nil
+        }
     }
 
     // MARK: - Public API
@@ -139,9 +174,10 @@ final class AnnotationEditorWindow: NSPanel {
 // MARK: - Annotation Notification Names
 
 extension Notification.Name {
-    static let annotationUndo   = Notification.Name("annotationUndo")
-    static let annotationRedo   = Notification.Name("annotationRedo")
-    static let annotationCopy   = Notification.Name("annotationCopy")
-    static let annotationSave   = Notification.Name("annotationSave")
-    static let annotationDelete = Notification.Name("annotationDelete")
+    static let annotationUndo       = Notification.Name("annotationUndo")
+    static let annotationRedo       = Notification.Name("annotationRedo")
+    static let annotationCopy       = Notification.Name("annotationCopy")
+    static let annotationSave       = Notification.Name("annotationSave")
+    static let annotationDelete     = Notification.Name("annotationDelete")
+    static let annotationSelectTool = Notification.Name("annotationSelectTool")
 }
