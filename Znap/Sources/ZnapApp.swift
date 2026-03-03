@@ -73,9 +73,14 @@ struct ZnapApp: App {
             }
             .keyboardShortcut(",")
 
+            Button("Check for Updates...") {
+                appDelegate.updaterController.checkForUpdates(nil)
+            }
+
             Divider()
 
-            Text("Znap v0.1.0").foregroundColor(.secondary)
+            Text("Znap v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?")")
+                .foregroundColor(.secondary)
 
             Divider()
 
