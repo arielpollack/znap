@@ -43,6 +43,18 @@ struct AnnotationCanvasView: View {
     /// Called when the curve handle is double-clicked to reset.
     var onCurveHandleReset: ((UUID) -> Void)?
 
+    /// Called when a text/handwriting resize drag starts (for undo snapshot).
+    var onResizeStarted: (() -> Void)?
+
+    /// Called when a text/handwriting annotation is resized (passes annotation ID and new fontSize).
+    var onTextResized: ((UUID, CGFloat) -> Void)?
+
+    /// The ID of the annotation currently hovered, if any.
+    var hoveredAnnotationID: UUID?
+
+    /// Called when the mouse hovers over an annotation.
+    var onHoverChanged: ((UUID?) -> Void)?
+
     // MARK: - State
 
     @State private var dragStart: CGPoint?
@@ -72,7 +84,20 @@ struct AnnotationCanvasView: View {
                 drawAnnotation(inProgress, in: &context, canvasSize: size)
             }
 
-            // 4. Draw selection indicator.
+            // 4. Draw hover highlight (skip if it's already selected).
+            if let hovID = hoveredAnnotationID,
+               hovID != selectedAnnotationID,
+               let annotation = annotations.first(where: { $0.id == hovID }) {
+                let bbox = AnnotationHitTesting.boundingBox(for: annotation)
+                let hoverPath = Path(bbox)
+                context.stroke(
+                    hoverPath,
+                    with: .color(.blue.opacity(0.25)),
+                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
+                )
+            }
+
+            // 5. Draw selection indicator.
             if let selID = selectedAnnotationID,
                let annotation = annotations.first(where: { $0.id == selID }) {
                 let bbox = AnnotationHitTesting.boundingBox(for: annotation)
@@ -82,6 +107,13 @@ struct AnnotationCanvasView: View {
                     with: .color(.blue.opacity(0.6)),
                     style: StrokeStyle(lineWidth: 1.5, dash: [6, 3])
                 )
+
+                // Text/handwriting resize handle.
+                if annotation.type == .text || annotation.type == .handwriting {
+                    let textBounds = AnnotationHitTesting.textBounds(for: annotation)
+                    let br = CGPoint(x: textBounds.maxX, y: textBounds.maxY)
+                    drawHandle(circle: br, in: &context)
+                }
 
                 // Arrow handle indicators.
                 if annotation.type == .arrow {
@@ -195,6 +227,15 @@ struct AnnotationCanvasView: View {
                 },
                 onCurveHandleReset: { id in
                     onCurveHandleReset?(id)
+                },
+                onResizeStarted: {
+                    onResizeStarted?()
+                },
+                onTextResized: { id, newFontSize in
+                    onTextResized?(id, newFontSize)
+                },
+                onHoverChanged: { id in
+                    onHoverChanged?(id)
                 }
             )
         )
@@ -532,9 +573,13 @@ private struct AnnotationMouseOverlay: NSViewRepresentable {
     let onArrowHandleDragged: (UUID, AnnotationHitTesting.ArrowHandle, CGPoint) -> Void
     let onHandleDragStarted: () -> Void
     let onCurveHandleReset: (UUID) -> Void
+    let onResizeStarted: () -> Void
+    let onTextResized: (UUID, CGFloat) -> Void
+    let onHoverChanged: (UUID?) -> Void
 
     func makeNSView(context: Context) -> AnnotationMouseView {
         let view = AnnotationMouseView()
+        view.setupTracking()
         updateView(view)
         return view
     }
@@ -569,6 +614,9 @@ private struct AnnotationMouseOverlay: NSViewRepresentable {
         view.onArrowHandleDragged = onArrowHandleDragged
         view.onHandleDragStarted = onHandleDragStarted
         view.onCurveHandleReset = onCurveHandleReset
+        view.onResizeStarted = onResizeStarted
+        view.onTextResized = onTextResized
+        view.onHoverChanged = onHoverChanged
     }
 }
 
@@ -596,6 +644,9 @@ final class AnnotationMouseView: NSView, NSTextFieldDelegate {
     var onArrowHandleDragged: ((UUID, AnnotationHitTesting.ArrowHandle, CGPoint) -> Void)?
     var onHandleDragStarted: (() -> Void)?
     var onCurveHandleReset: ((UUID) -> Void)?
+    var onResizeStarted: (() -> Void)?
+    var onTextResized: ((UUID, CGFloat) -> Void)?
+    var onHoverChanged: ((UUID?) -> Void)?
 
     private var mouseDownPoint: CGPoint?
     private var hasDragged = false
@@ -608,11 +659,18 @@ final class AnnotationMouseView: NSView, NSTextFieldDelegate {
         case selecting(UUID)          // stores the hit annotation ID directly
         case moving(UUID)
         case draggingHandle(UUID, AnnotationHitTesting.ArrowHandle)
+        case resizing(UUID)
     }
 
     private var dragMode: DragMode = .none
     private var lastDragLocation: CGPoint?
     private var didPushUndoForDrag = false
+
+    private var currentHoveredID: UUID?
+    private var trackingArea: NSTrackingArea?
+    private var resizeOriginalFontSize: CGFloat = 16
+    private var resizeOriginalDiagonal: CGFloat = 1
+    private var resizeAnchor: CGPoint = .zero
 
     private var isPointPlacementTool: Bool {
         selectedTool == .counter
@@ -620,6 +678,28 @@ final class AnnotationMouseView: NSView, NSTextFieldDelegate {
 
     private var isTextPlacementTool: Bool {
         selectedTool == .text || selectedTool == .handwriting
+    }
+
+    // MARK: - Tracking Area
+
+    func setupTracking() {
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let location = convert(event.locationInWindow, from: nil)
+        let hitID = AnnotationHitTesting.findTopmost(at: location, in: annotations)
+        if hitID != currentHoveredID {
+            currentHoveredID = hitID
+            onHoverChanged?(hitID)
+        }
     }
 
     // MARK: - Mouse Events
@@ -637,12 +717,6 @@ final class AnnotationMouseView: NSView, NSTextFieldDelegate {
         hasDragged = false
         didPushUndoForDrag = false
         dragMode = .none
-
-        // Text tools: just record position, no drag preview.
-        if isTextPlacementTool {
-            dragMode = .none
-            return
-        }
 
         // If there's a selected arrow, check for handle hits first.
         if let selID = selectedAnnotationID,
@@ -667,15 +741,37 @@ final class AnnotationMouseView: NSView, NSTextFieldDelegate {
             }
         }
 
-        // Hit test all annotations.
+        // If there's a selected text/handwriting, check for resize handle hit.
+        if let selID = selectedAnnotationID,
+           let annotation = annotations.first(where: { $0.id == selID }),
+           (annotation.type == .text || annotation.type == .handwriting) {
+            if let _ = AnnotationHitTesting.hitTestResizeHandle(point: location, annotation: annotation) {
+                let textBounds = AnnotationHitTesting.textBounds(for: annotation)
+                resizeAnchor = annotation.startPoint
+                resizeOriginalFontSize = annotation.fontSize ?? (annotation.type == .handwriting ? 24 : 16)
+                let br = CGPoint(x: textBounds.maxX, y: textBounds.maxY)
+                resizeOriginalDiagonal = hypot(br.x - resizeAnchor.x, br.y - resizeAnchor.y)
+                if resizeOriginalDiagonal < 1 { resizeOriginalDiagonal = 1 }
+                dragMode = .resizing(selID)
+                return
+            }
+        }
+
+        // Hit test all annotations — regardless of which tool is active.
         if let hitID = AnnotationHitTesting.findTopmost(at: location, in: annotations) {
             onAnnotationSelected?(hitID)
             dragMode = .selecting(hitID)
             return
         }
 
-        // No hit — clear selection and start creating.
+        // No hit — clear selection and start creating with the active tool.
         onSelectionCleared?()
+
+        // Text tools: just record position, no drag preview.
+        if isTextPlacementTool {
+            dragMode = .creating
+            return
+        }
 
         // Point-placement tools (counter) start immediately on click.
         if isPointPlacementTool {
@@ -688,7 +784,6 @@ final class AnnotationMouseView: NSView, NSTextFieldDelegate {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        if isTextPlacementTool { return }
         guard let start = mouseDownPoint else { return }
         let location = convert(event.locationInWindow, from: nil)
 
@@ -721,7 +816,20 @@ final class AnnotationMouseView: NSView, NSTextFieldDelegate {
             }
             onArrowHandleDragged?(id, handle, location)
 
+        case .resizing(let id):
+            if !didPushUndoForDrag {
+                onResizeStarted?()
+                didPushUndoForDrag = true
+            }
+            let newDiagonal = hypot(location.x - resizeAnchor.x, location.y - resizeAnchor.y)
+            let scale = newDiagonal / resizeOriginalDiagonal
+            let newFontSize = min(max(resizeOriginalFontSize * scale, 8), 200)
+            onTextResized?(id, newFontSize)
+
         case .creating:
+            // Text tools don't support drag-to-create.
+            if isTextPlacementTool { return }
+
             if !hasDragged && !isPointPlacementTool {
                 let distance = hypot(location.x - start.x, location.y - start.y)
                 if distance < 1 { return }
@@ -738,21 +846,18 @@ final class AnnotationMouseView: NSView, NSTextFieldDelegate {
     override func mouseUp(with event: NSEvent) {
         guard let start = mouseDownPoint else { return }
 
-        if isTextPlacementTool {
-            showTextField(at: start)
-            mouseDownPoint = nil
-            dragMode = .none
-            return
-        }
-
         switch dragMode {
         case .creating:
-            let end = convert(event.locationInWindow, from: nil)
-            if isPointPlacementTool || hasDragged {
-                onDragEnded?(start, end)
+            if isTextPlacementTool {
+                showTextField(at: start)
+            } else {
+                let end = convert(event.locationInWindow, from: nil)
+                if isPointPlacementTool || hasDragged {
+                    onDragEnded?(start, end)
+                }
             }
 
-        case .selecting, .moving, .draggingHandle:
+        case .selecting, .moving, .draggingHandle, .resizing:
             break
 
         case .none:

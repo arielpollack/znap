@@ -16,6 +16,7 @@ struct AnnotationEditorView: View {
     @State private var redoStack: [[AnnotationDocument.Annotation]] = []
     @State private var counterValue: Int = 1
     @State private var selectedAnnotationID: UUID?
+    @State private var hoveredAnnotationID: UUID?
     /// Suppresses spurious undo pushes when loading a selected annotation's properties.
     @State private var isLoadingSelection = false
     @State private var zoomLevel: CGFloat = 1.0
@@ -141,6 +142,18 @@ struct AnnotationEditorView: View {
                         undoStack.append(document.annotations)
                         redoStack.removeAll()
                         document.annotations[index].curveControlPoint = nil
+                    },
+                    onResizeStarted: {
+                        undoStack.append(document.annotations)
+                        redoStack.removeAll()
+                    },
+                    onTextResized: { id, newFontSize in
+                        guard let index = document.annotations.firstIndex(where: { $0.id == id }) else { return }
+                        document.annotations[index].fontSize = newFontSize
+                    },
+                    hoveredAnnotationID: hoveredAnnotationID,
+                    onHoverChanged: { id in
+                        hoveredAnnotationID = id
                     }
                 )
                 .padding(20)

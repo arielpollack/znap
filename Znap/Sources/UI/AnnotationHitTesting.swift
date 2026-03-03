@@ -141,10 +141,25 @@ enum AnnotationHitTesting {
         }
     }
 
-    // MARK: - Private Helpers
+    // MARK: - Resize Handles
+
+    enum ResizeHandle { case bottomRight }
+
+    /// Returns which resize handle (if any) is at `point` when a text/handwriting annotation is selected.
+    static func hitTestResizeHandle(
+        point: CGPoint, annotation: AnnotationDocument.Annotation, tolerance: CGFloat = 12
+    ) -> ResizeHandle? {
+        guard annotation.type == .text || annotation.type == .handwriting else { return nil }
+        let bounds = textBounds(for: annotation)
+        let br = CGPoint(x: bounds.maxX, y: bounds.maxY)
+        if hypot(point.x - br.x, point.y - br.y) <= tolerance { return .bottomRight }
+        return nil
+    }
+
+    // MARK: - Text Bounds
 
     /// Approximate text bounds based on font and string.
-    private static func textBounds(for annotation: AnnotationDocument.Annotation) -> CGRect {
+    static func textBounds(for annotation: AnnotationDocument.Annotation) -> CGRect {
         guard let string = annotation.text, !string.isEmpty else {
             return CGRect(origin: annotation.startPoint, size: .zero)
         }
