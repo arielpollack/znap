@@ -8,6 +8,10 @@ settings:
   SWIFT_VERSION: "5.9"
   CODE_SIGN_STYLE: Automatic
   DEVELOPMENT_TEAM: F92RQULD22
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.7.0"
 targets:
   Znap:
     type: application
@@ -21,6 +25,8 @@ targets:
       CODE_SIGN_ENTITLEMENTS: Znap/Sources/Znap.entitlements
       INFOPLIST_FILE: Znap/Sources/Info.plist
       GENERATE_INFOPLIST_FILE: false
+    dependencies:
+      - package: Sparkle
   ZnapTests:
     type: bundle.unit-test
     platform: macOS
