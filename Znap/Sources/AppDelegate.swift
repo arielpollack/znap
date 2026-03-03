@@ -20,6 +20,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
             handler: { [weak self] in self?.startFullscreenCapture() }
         )
+
+        // Cmd+Shift+5 for window capture (kVK_ANSI_5)
+        HotkeyService.shared.register(
+            keyCode: UInt32(kVK_ANSI_5),
+            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
+            handler: { [weak self] in self?.startWindowCapture() }
+        )
+
     }
 
     func startAreaCapture() {
@@ -58,4 +66,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
+
+    func startWindowCapture() {
+        WindowHighlightOverlay.beginWindowSelection { windowID in
+            guard let windowID = windowID else { return }
+            Task {
+                do {
+                    let cgImage = try await CaptureService.shared.captureWindow(windowID)
+                    let nsImage = NSImage(
+                        cgImage: cgImage,
+                        size: NSSize(width: cgImage.width, height: cgImage.height)
+                    )
+                    await MainActor.run {
+                        QuickAccessOverlay.show(image: nsImage)
+                    }
+                } catch {
+                    print("Window capture failed: \(error)")
+                }
+            }
+        }
+    }
+
 }
