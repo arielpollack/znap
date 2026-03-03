@@ -1,4 +1,4 @@
-.PHONY: generate build run relaunch install test clean dmg
+.PHONY: generate build run relaunch install test clean dmg release-key release
 
 generate:
 	xcodegen generate
@@ -27,3 +27,12 @@ clean:
 
 dmg: build
 	bash scripts/create-dmg.sh
+
+release-key:
+	bash scripts/generate-sparkle-key.sh
+
+release:
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make release VERSION=1.0.0"; exit 1; fi
+	git tag -a "v$(VERSION)" -m "Release v$(VERSION)"
+	git push origin "v$(VERSION)"
+	@echo "Release v$(VERSION) triggered. Check GitHub Actions for progress."
