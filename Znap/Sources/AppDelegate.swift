@@ -65,6 +65,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
             handler: { PinnedScreenshotPanel.toggleAllVisibility() }
         )
+
+        // Cmd+Shift+1 for All-In-One HUD (kVK_ANSI_1)
+        HotkeyService.shared.register(
+            keyCode: UInt32(kVK_ANSI_1),
+            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
+            handler: { [weak self] in self?.showAllInOne() }
+        )
+    }
+
+    func showAllInOne() {
+        let modes: [AllInOneHUD.Mode] = [
+            AllInOneHUD.Mode(
+                id: "area",
+                icon: "rectangle.dashed",
+                label: "Area",
+                shortcut: "\u{2318}\u{21e7}4"
+            ) { [weak self] in self?.startAreaCapture() },
+            AllInOneHUD.Mode(
+                id: "window",
+                icon: "macwindow",
+                label: "Window",
+                shortcut: "\u{2318}\u{21e7}5"
+            ) { [weak self] in self?.startWindowCapture() },
+            AllInOneHUD.Mode(
+                id: "full",
+                icon: "rectangle.fill",
+                label: "Full",
+                shortcut: "\u{2318}\u{21e7}3"
+            ) { [weak self] in self?.startFullscreenCapture() },
+            AllInOneHUD.Mode(
+                id: "scroll",
+                icon: "arrow.up.and.down.text.horizontal",
+                label: "Scroll",
+                shortcut: "\u{2318}\u{21e7}7"
+            ) { [weak self] in self?.startScrollCapture() },
+            AllInOneHUD.Mode(
+                id: "record",
+                icon: "record.circle",
+                label: "Record",
+                shortcut: "\u{2318}\u{21e7}R"
+            ) { [weak self] in self?.toggleRecording() },
+            AllInOneHUD.Mode(
+                id: "ocr",
+                icon: "text.viewfinder",
+                label: "OCR",
+                shortcut: "\u{2318}\u{21e7}2"
+            ) { [weak self] in self?.startOCRCapture() },
+        ]
+        AllInOneHUD.show(with: modes)
     }
 
     func startAreaCapture() {
