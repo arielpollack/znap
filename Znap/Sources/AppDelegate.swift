@@ -2,6 +2,7 @@ import AppKit
 import AVFoundation
 import Carbon
 import ScreenCaptureKit
+import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -42,6 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             keyCode: UInt32(kVK_ANSI_R),
             modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
             handler: { [weak self] in self?.toggleRecording() }
+        )
+
+        // Cmd+Shift+2 for OCR text recognition (kVK_ANSI_2)
+        HotkeyService.shared.register(
+            keyCode: UInt32(kVK_ANSI_2),
+            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
+            handler: { [weak self] in self?.startOCRCapture() }
         )
     }
 
@@ -120,6 +128,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    func startOCRCapture() {
+        OverlayWindow.beginAreaSelection { rect in
+            guard let rect = rect else { return }
+            Task {
+                do {
+                    let cgImage = try await CaptureService.shared.captureArea(rect)
+                    let text = try await OCRService.shared.recognizeText(in: cgImage)
+
+                    await MainActor.run {
+                        // Copy recognized text to clipboard
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(text, forType: .string)
+
+                        // Show notification
+                        self.showOCRNotification(text: text)
+                    }
+                } catch {
+                    print("OCR capture failed: \(error)")
+                }
+            }
+        }
+    }
+
+    private func showOCRNotification(text: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Znap OCR"
+        if text.isEmpty {
+            content.body = "No text found in selection."
+        } else {
+            let preview = text.prefix(100)
+            content.body = "Copied to clipboard: \(preview)\(text.count > 100 ? "..." : "")"
+        }
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
     }
 
     func toggleRecording() {
