@@ -103,6 +103,7 @@ final class QuickAccessOverlay: NSPanel {
         let overlay = QuickAccessOverlay(image: image)
         current = overlay
 
+        NSApp.activate(ignoringOtherApps: true)
         overlay.alphaValue = 0
         overlay.makeKeyAndOrderFront(nil)
 

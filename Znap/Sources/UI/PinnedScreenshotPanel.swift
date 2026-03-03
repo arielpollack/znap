@@ -80,6 +80,7 @@ final class PinnedScreenshotPanel: NSPanel {
         // Track this panel
         Self.allPins.append(self)
 
+        NSApp.activate(ignoringOtherApps: true)
         makeKeyAndOrderFront(nil)
     }
 

@@ -66,6 +66,7 @@ final class AnnotationEditorWindow: NSPanel {
 
         let window = AnnotationEditorWindow(image: image)
         current = window
+        NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
 }

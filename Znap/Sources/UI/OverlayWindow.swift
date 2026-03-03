@@ -105,6 +105,7 @@ final class OverlayWindow: NSPanel {
 
         activeWindows = windows
 
+        NSApp.activate(ignoringOtherApps: true)
         NSCursor.crosshair.push()
 
         for window in windows {

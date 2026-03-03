@@ -74,6 +74,7 @@ final class WindowHighlightOverlay {
         panel.contentView = trackingView
         activePanel = panel
 
+        NSApp.activate(ignoringOtherApps: true)
         NSCursor.crosshair.push()
         panel.makeKeyAndOrderFront(nil)
         panel.makeKey()

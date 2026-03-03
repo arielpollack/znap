@@ -101,6 +101,7 @@ final class AllInOneHUD: NSPanel {
         let hud = AllInOneHUD(modes: modes)
         current = hud
 
+        NSApp.activate(ignoringOtherApps: true)
         hud.alphaValue = 0
         hud.makeKeyAndOrderFront(nil)
 
