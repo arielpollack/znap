@@ -40,9 +40,7 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             MARKETING_VERSION=${{ steps.version.outputs.version }} \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGN_IDENTITY="-"
 
       - name: Create DMG
         run: bash scripts/create-dmg.sh
@@ -90,7 +88,6 @@ jobs:
                 <enclosure
                   url="${DOWNLOAD_URL}"
                   ${SIGNATURE}
-                  length="${SIZE}"
                   type="application/octet-stream" />
               </item>
             </channel>
