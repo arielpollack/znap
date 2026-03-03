@@ -1,0 +1,32 @@
+name: Znap
+options:
+  bundleIdPrefix: com.znap
+  deploymentTarget:
+    macOS: "13.0"
+  xcodeVersion: "15.0"
+settings:
+  SWIFT_VERSION: "5.9"
+  CODE_SIGN_IDENTITY: "-"
+targets:
+  Znap:
+    type: application
+    platform: macOS
+    sources:
+      - Znap/Sources
+    resources:
+      - Znap/Resources
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.znap.app
+      CODE_SIGN_ENTITLEMENTS: Znap/Sources/Znap.entitlements
+      INFOPLIST_FILE: Znap/Sources/Info.plist
+      GENERATE_INFOPLIST_FILE: false
+  ZnapTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Znap/Tests
+    dependencies:
+      - target: Znap
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: com.znap.tests
+      GENERATE_INFOPLIST_FILE: true

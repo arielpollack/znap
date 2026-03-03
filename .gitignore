@@ -1,0 +1,24 @@
+# Xcode
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+
+# Build
+build/
+
+# macOS
+.DS_Store
+*.swp
+*.swo
+
+# Archives
+*.xcarchive
+
+# Temporary files
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# DMG output
+*.dmg
