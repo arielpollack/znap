@@ -1,0 +1,221 @@
+import ScreenCaptureKit
+import CoreGraphics
+import AppKit
+
+/// Service that wraps ScreenCaptureKit and CGWindowList APIs for capturing screenshots.
+///
+/// Provides three capture modes:
+/// - Area capture: capture a rectangular region of the screen
+/// - Window capture: capture a specific window by its CGWindowID
+/// - Fullscreen capture: capture an entire display
+///
+/// On macOS 14+, area and fullscreen captures use `SCScreenshotManager` for high-quality,
+/// Retina-aware output. On macOS 13, a `CGWindowListCreateImage` fallback is used.
+/// Window capture always uses `CGWindowListCreateImage`.
+final class CaptureService {
+    static let shared = CaptureService()
+
+    enum CaptureError: Error {
+        case noDisplay
+        case captureFailed
+        case permissionDenied
+    }
+
+    private init() {}
+
+    // MARK: - Area Capture
+
+    /// Capture a rectangular area of the screen.
+    ///
+    /// The `rect` parameter is in point coordinates (as used by AppKit/NSScreen).
+    /// On macOS 14+, ScreenCaptureKit is used and coordinates are converted to pixel
+    /// coordinates for Retina displays. On macOS 13, `CGWindowListCreateImage` is used
+    /// directly with the point-coordinate rect.
+    ///
+    /// - Parameter rect: The rectangle to capture, in screen point coordinates.
+    /// - Returns: A `CGImage` of the captured area.
+    func captureArea(_ rect: CGRect) async throws -> CGImage {
+        if #available(macOS 14.0, *) {
+            return try await captureAreaWithScreenCaptureKit(rect)
+        } else {
+            return try captureAreaWithCGWindowList(rect)
+        }
+    }
+
+    // MARK: - Window Capture
+
+    /// Capture a specific window by its `CGWindowID`.
+    ///
+    /// Uses `CGWindowListCreateImage` with best-resolution and bounds-ignore-framing options,
+    /// which is simpler than ScreenCaptureKit for single-window captures.
+    ///
+    /// - Parameter windowID: The `CGWindowID` of the window to capture.
+    /// - Returns: A `CGImage` of the captured window.
+    func captureWindow(_ windowID: CGWindowID) async throws -> CGImage {
+        guard let image = CGWindowListCreateImage(
+            .null,
+            .optionIncludingWindow,
+            windowID,
+            [.boundsIgnoreFraming, .bestResolution]
+        ) else {
+            throw CaptureError.captureFailed
+        }
+        return image
+    }
+
+    // MARK: - Fullscreen Capture
+
+    /// Capture the entire screen.
+    ///
+    /// If a `displayID` is provided, that specific display is captured.
+    /// Otherwise, the first available display (typically the primary display) is used.
+    ///
+    /// - Parameter displayID: Optional `CGDirectDisplayID` to capture. Defaults to the primary display.
+    /// - Returns: A `CGImage` of the full display.
+    func captureFullscreen(_ displayID: CGDirectDisplayID? = nil) async throws -> CGImage {
+        if #available(macOS 14.0, *) {
+            return try await captureFullscreenWithScreenCaptureKit(displayID)
+        } else {
+            return try captureFullscreenWithCGWindowList(displayID)
+        }
+    }
+
+    // MARK: - macOS 14+ ScreenCaptureKit Implementations
+
+    /// Area capture using `SCScreenshotManager` (macOS 14+).
+    @available(macOS 14.0, *)
+    private func captureAreaWithScreenCaptureKit(_ rect: CGRect) async throws -> CGImage {
+        let content = try await shareableContent()
+        guard let display = display(containing: rect.origin, in: content.displays) else {
+            throw CaptureError.noDisplay
+        }
+
+        let scaleFactor = Self.scaleFactor(for: display)
+
+        let filter = SCContentFilter(display: display, excludingWindows: [])
+
+        let config = SCStreamConfiguration()
+        config.sourceRect = CGRect(
+            x: rect.origin.x * scaleFactor,
+            y: rect.origin.y * scaleFactor,
+            width: rect.width * scaleFactor,
+            height: rect.height * scaleFactor
+        )
+        config.width = Int(rect.width * scaleFactor)
+        config.height = Int(rect.height * scaleFactor)
+        config.showsCursor = false
+        config.capturesAudio = false
+
+        return try await captureImage(filter: filter, configuration: config)
+    }
+
+    /// Fullscreen capture using `SCScreenshotManager` (macOS 14+).
+    @available(macOS 14.0, *)
+    private func captureFullscreenWithScreenCaptureKit(
+        _ displayID: CGDirectDisplayID?
+    ) async throws -> CGImage {
+        let content = try await shareableContent()
+
+        let display: SCDisplay
+        if let displayID = displayID {
+            guard let found = content.displays.first(where: { $0.displayID == displayID }) else {
+                throw CaptureError.noDisplay
+            }
+            display = found
+        } else {
+            guard let first = content.displays.first else {
+                throw CaptureError.noDisplay
+            }
+            display = first
+        }
+
+        let filter = SCContentFilter(display: display, excludingWindows: [])
+
+        let config = SCStreamConfiguration()
+        config.width = display.width
+        config.height = display.height
+        config.showsCursor = false
+        config.capturesAudio = false
+
+        return try await captureImage(filter: filter, configuration: config)
+    }
+
+    // MARK: - CGWindowList Fallback Implementations
+
+    /// Area capture using `CGWindowListCreateImage` (macOS 13 fallback).
+    private func captureAreaWithCGWindowList(_ rect: CGRect) throws -> CGImage {
+        guard let image = CGWindowListCreateImage(
+            rect,
+            .optionAll,
+            kCGNullWindowID,
+            [.bestResolution]
+        ) else {
+            throw CaptureError.captureFailed
+        }
+        return image
+    }
+
+    /// Fullscreen capture using `CGWindowListCreateImage` (macOS 13 fallback).
+    private func captureFullscreenWithCGWindowList(
+        _ displayID: CGDirectDisplayID?
+    ) throws -> CGImage {
+        let targetDisplayID = displayID ?? CGMainDisplayID()
+        let bounds = CGDisplayBounds(targetDisplayID)
+
+        guard let image = CGWindowListCreateImage(
+            bounds,
+            .optionAll,
+            kCGNullWindowID,
+            [.bestResolution]
+        ) else {
+            throw CaptureError.captureFailed
+        }
+        return image
+    }
+
+    // MARK: - Private Helpers
+
+    /// Retrieve shareable content, wrapping the ScreenCaptureKit permission check.
+    private func shareableContent() async throws -> SCShareableContent {
+        do {
+            return try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        } catch {
+            // SCShareableContent throws when screen recording permission is not granted.
+            throw CaptureError.permissionDenied
+        }
+    }
+
+    /// Find the display whose frame contains the given point.
+    ///
+    /// - Parameters:
+    ///   - point: A point in screen coordinates.
+    ///   - displays: The list of available displays.
+    /// - Returns: The `SCDisplay` containing the point, or `nil` if none match.
+    private func display(containing point: CGPoint, in displays: [SCDisplay]) -> SCDisplay? {
+        displays.first { $0.frame.contains(point) }
+    }
+
+    /// Compute the scale factor (pixels per point) for a given display.
+    ///
+    /// Uses the ratio of the pixel width (`display.width`) to the point width (`display.frame.width`).
+    static func scaleFactor(for display: SCDisplay) -> CGFloat {
+        guard display.frame.width > 0 else { return 1.0 }
+        return CGFloat(display.width) / display.frame.width
+    }
+
+    /// Perform the actual screenshot capture using `SCScreenshotManager` (macOS 14+).
+    @available(macOS 14.0, *)
+    private func captureImage(
+        filter: SCContentFilter,
+        configuration: SCStreamConfiguration
+    ) async throws -> CGImage {
+        do {
+            return try await SCScreenshotManager.captureImage(
+                contentFilter: filter,
+                configuration: configuration
+            )
+        } catch {
+            throw CaptureError.captureFailed
+        }
+    }
+}
