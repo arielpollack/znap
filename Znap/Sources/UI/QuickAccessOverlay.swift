@@ -170,8 +170,8 @@ final class QuickAccessOverlay: NSPanel {
         case .dismiss:
             animateOut()
         case .openAnnotate:
-            // TODO: Task 10 — open annotation editor
-            break
+            AnnotationEditorWindow.open(with: image)
+            animateOut()
         case .saveAs:
             // TODO: wire up NSSavePanel
             break

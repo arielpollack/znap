@@ -1,0 +1,180 @@
+import SwiftUI
+
+/// The toolbar displayed at the top of the annotation editor, containing tool
+/// buttons, a colour palette, a stroke width slider, and undo/redo/copy/save actions.
+struct AnnotationToolbar: View {
+
+    // MARK: - Bindings
+
+    @Binding var selectedTool: AnnotationDocument.AnnotationType
+    @Binding var selectedColor: AnnotationDocument.CodableColor
+    @Binding var strokeWidth: CGFloat
+
+    // MARK: - Callbacks
+
+    var onUndo: () -> Void
+    var onRedo: () -> Void
+    var onCopy: () -> Void
+    var onSave: () -> Void
+
+    var canUndo: Bool
+    var canRedo: Bool
+
+    // MARK: - Tool Definitions
+
+    /// Maps each annotation type to a system image name.
+    private static let tools: [(AnnotationDocument.AnnotationType, String)] = [
+        (.arrow, "arrow.up.right"),
+        (.rectangle, "rectangle"),
+        (.filledRectangle, "rectangle.fill"),
+        (.ellipse, "circle"),
+        (.line, "line.diagonal"),
+        (.text, "textformat"),
+        (.counter, "number.circle"),
+        (.pixelate, "square.grid.3x3"),
+        (.blur, "drop"),
+        (.spotlight, "sun.max"),
+        (.highlighter, "highlighter"),
+        (.pencil, "pencil"),
+    ]
+
+    // MARK: - Colour Palette
+
+    /// Preset colours offered in the toolbar.
+    private static let paletteColors: [(String, AnnotationDocument.CodableColor)] = [
+        ("Red",    AnnotationDocument.CodableColor(red: 1, green: 0.23, blue: 0.19, alpha: 1)),
+        ("Orange", AnnotationDocument.CodableColor(red: 1, green: 0.58, blue: 0, alpha: 1)),
+        ("Yellow", AnnotationDocument.CodableColor(red: 1, green: 0.8, blue: 0, alpha: 1)),
+        ("Green",  AnnotationDocument.CodableColor(red: 0.2, green: 0.78, blue: 0.35, alpha: 1)),
+        ("Blue",   AnnotationDocument.CodableColor(red: 0, green: 0.48, blue: 1, alpha: 1)),
+        ("Purple", AnnotationDocument.CodableColor(red: 0.69, green: 0.32, blue: 0.87, alpha: 1)),
+        ("White",  AnnotationDocument.CodableColor(red: 1, green: 1, blue: 1, alpha: 1)),
+        ("Black",  AnnotationDocument.CodableColor(red: 0, green: 0, blue: 0, alpha: 1)),
+    ]
+
+    // MARK: - Body
+
+    var body: some View {
+        HStack(spacing: 4) {
+            // Tool buttons
+            ForEach(Self.tools, id: \.0) { tool, icon in
+                Button {
+                    selectedTool = tool
+                } label: {
+                    Image(systemName: icon)
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .background(
+                    selectedTool == tool
+                        ? Color.accentColor.opacity(0.25)
+                        : Color.clear
+                )
+                .cornerRadius(6)
+                .help(tool.rawValue)
+            }
+
+            Divider().frame(height: 24).padding(.horizontal, 4)
+
+            // Colour palette
+            ForEach(Self.paletteColors, id: \.0) { name, codableColor in
+                Button {
+                    selectedColor = codableColor
+                } label: {
+                    Circle()
+                        .fill(Color(
+                            red: codableColor.red,
+                            green: codableColor.green,
+                            blue: codableColor.blue,
+                            opacity: codableColor.alpha
+                        ))
+                        .frame(width: 18, height: 18)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(
+                                    selectedColor == codableColor
+                                        ? Color.primary
+                                        : Color.clear,
+                                    lineWidth: 2
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .help(name)
+            }
+
+            // Custom colour picker
+            ColorPicker("", selection: customColorBinding)
+                .labelsHidden()
+                .frame(width: 24)
+
+            Divider().frame(height: 24).padding(.horizontal, 4)
+
+            // Stroke width slider
+            Text("Width:")
+                .font(.caption)
+            Slider(value: $strokeWidth, in: 1...20, step: 1)
+                .frame(width: 80)
+            Text("\(Int(strokeWidth))")
+                .font(.caption)
+                .frame(width: 20)
+
+            Divider().frame(height: 24).padding(.horizontal, 4)
+
+            // Undo / Redo
+            Button(action: onUndo) {
+                Image(systemName: "arrow.uturn.backward")
+            }
+            .disabled(!canUndo)
+            .help("Undo")
+
+            Button(action: onRedo) {
+                Image(systemName: "arrow.uturn.forward")
+            }
+            .disabled(!canRedo)
+            .help("Redo")
+
+            Divider().frame(height: 24).padding(.horizontal, 4)
+
+            // Copy / Save
+            Button(action: onCopy) {
+                Image(systemName: "doc.on.doc")
+            }
+            .help("Copy to Clipboard")
+
+            Button(action: onSave) {
+                Image(systemName: "square.and.arrow.down")
+            }
+            .help("Save")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Custom Colour Binding
+
+    /// Bridges between SwiftUI's `Color` (used by `ColorPicker`) and
+    /// ``AnnotationDocument/CodableColor``.
+    private var customColorBinding: Binding<Color> {
+        Binding<Color>(
+            get: {
+                Color(
+                    red: selectedColor.red,
+                    green: selectedColor.green,
+                    blue: selectedColor.blue,
+                    opacity: selectedColor.alpha
+                )
+            },
+            set: { newColor in
+                if let nsColor = NSColor(newColor).usingColorSpace(.sRGB) {
+                    selectedColor = AnnotationDocument.CodableColor(
+                        red: nsColor.redComponent,
+                        green: nsColor.greenComponent,
+                        blue: nsColor.blueComponent,
+                        alpha: nsColor.alphaComponent
+                    )
+                }
+            }
+        )
+    }
+}
