@@ -16,6 +16,8 @@ struct ZnapApp: App {
             Divider()
             Button("Record Screen (\u{2318}\u{21e7}R)") { appDelegate.toggleRecording() }
             Divider()
+            Button("Toggle Pins (\u{2318}\u{21e7}P)") { PinnedScreenshotPanel.toggleAllVisibility() }
+            Divider()
             Text("Znap v0.1.0").foregroundColor(.secondary)
             Divider()
             Button("Quit") { NSApplication.shared.terminate(nil) }

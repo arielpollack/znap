@@ -58,6 +58,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
             handler: { [weak self] in self?.startScrollCapture() }
         )
+
+        // Cmd+Shift+P for toggle all pinned screenshots (kVK_ANSI_P)
+        HotkeyService.shared.register(
+            keyCode: UInt32(kVK_ANSI_P),
+            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
+            handler: { PinnedScreenshotPanel.toggleAllVisibility() }
+        )
     }
 
     func startAreaCapture() {

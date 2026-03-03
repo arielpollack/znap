@@ -176,8 +176,8 @@ final class QuickAccessOverlay: NSPanel {
             // TODO: wire up NSSavePanel
             break
         case .pin:
-            // TODO: Task 16 — PinnedScreenshotPanel
-            break
+            let _ = PinnedScreenshotPanel(image: image)
+            animateOut()
         }
     }
 
