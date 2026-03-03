@@ -24,9 +24,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             handler: { [weak self] in self?.startFullscreenCapture() }
         )
 
-        // Cmd+Shift+5 for window capture (kVK_ANSI_5)
+        // Cmd+Shift+8 for window capture (kVK_ANSI_8)
+        // Note: Cmd+Shift+5 is reserved by macOS for the screenshot utility.
         HotkeyService.shared.register(
-            keyCode: UInt32(kVK_ANSI_5),
+            keyCode: UInt32(kVK_ANSI_8),
             modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
             handler: { [weak self] in self?.startWindowCapture() }
         )
@@ -90,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 id: "window",
                 icon: "macwindow",
                 label: "Window",
-                shortcut: "\u{2318}\u{21e7}5"
+                shortcut: "\u{2318}\u{21e7}8"
             ) { [weak self] in self?.startWindowCapture() },
             AllInOneHUD.Mode(
                 id: "full",

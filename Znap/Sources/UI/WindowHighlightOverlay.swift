@@ -38,7 +38,7 @@ final class WindowHighlightOverlay {
     /// - Parameter completion: Called with the `CGWindowID` of the selected window,
     ///   or `nil` if the user cancelled.
     static func beginWindowSelection(completion: @escaping (CGWindowID?) -> Void) {
-        guard let screen = NSScreen.main else {
+        guard NSScreen.main != nil else {
             completion(nil)
             return
         }
@@ -46,7 +46,7 @@ final class WindowHighlightOverlay {
         // Union of all screen frames for full coverage.
         let fullFrame = NSScreen.screens.reduce(CGRect.zero) { $0.union($1.frame) }
 
-        let panel = NSPanel(
+        let panel = KeyablePanel(
             contentRect: fullFrame,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -127,6 +127,14 @@ final class WindowHighlightOverlay {
     }
 }
 
+// MARK: - KeyablePanel
+
+/// A borderless `NSPanel` that can become the key window to receive keyboard events.
+private final class KeyablePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 // MARK: - WindowTrackingView
 
 /// NSView subclass that tracks mouse movement and detects windows under the cursor.
@@ -202,10 +210,9 @@ private final class WindowTrackingView: NSView {
         let mouseLocation = NSEvent.mouseLocation
         let ownPID = ProcessInfo.processInfo.processIdentifier
 
-        // Total screen height for CG-to-NS coordinate conversion.
-        let screenHeight = NSScreen.screens.reduce(CGFloat(0)) { result, screen in
-            max(result, screen.frame.maxY)
-        }
+        // Primary screen height for CG-to-NS coordinate conversion.
+        // CG origin is top-left of the primary display; NS origin is bottom-left.
+        let screenHeight = NSScreen.screens.first?.frame.height ?? 0
 
         guard let windowList = CGWindowListCopyWindowInfo(
             [.optionOnScreenOnly, .excludeDesktopElements],
