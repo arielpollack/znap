@@ -20,13 +20,13 @@
 	<string>1</string>
 	<key>LSUIElement</key>
 	<true/>
-	<key>NSScreenCaptureUsageDescription</key>
-	<string>Znap needs screen recording access to capture screenshots and record screen video.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Znap needs microphone access to record audio with screen recordings.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Znap needs screen recording access to capture screenshots and record screen video.</string>
 	<key>SUFeedURL</key>
 	<string>https://github.com/arielpollack/znap/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>PLACEHOLDER_EDDSA_PUBLIC_KEY</string>
+	<string>vJUEX2pA7afGqnMhdO2RwVXwBLxhrw9lC7W+e4s8R8o=</string>
 </dict>
 </plist>
