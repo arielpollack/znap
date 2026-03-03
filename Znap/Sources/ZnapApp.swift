@@ -6,22 +6,89 @@ struct ZnapApp: App {
 
     var body: some Scene {
         MenuBarExtra("Znap", systemImage: "camera.viewfinder") {
+            // All-In-One
+            Button("All-In-One (\u{2318}\u{21e7}1)") { appDelegate.showAllInOne() }
+
+            Divider()
+
+            // Capture modes
             Button("Capture Area (\u{2318}\u{21e7}4)") { appDelegate.startAreaCapture() }
             Button("Capture Fullscreen (\u{2318}\u{21e7}3)") { appDelegate.startFullscreenCapture() }
             Button("Capture Window (\u{2318}\u{21e7}5)") { appDelegate.startWindowCapture() }
             Button("Freeze & Capture (\u{2318}\u{21e7}6)") { appDelegate.startFreezeCapture() }
+
             Divider()
+
             Button("OCR Text (\u{2318}\u{21e7}2)") { appDelegate.startOCRCapture() }
             Button("Scrolling Capture (\u{2318}\u{21e7}7)") { appDelegate.startScrollCapture() }
+
             Divider()
+
             Button("Record Screen (\u{2318}\u{21e7}R)") { appDelegate.toggleRecording() }
+
             Divider()
+
+            // Pins
             Button("Toggle Pins (\u{2318}\u{21e7}P)") { PinnedScreenshotPanel.toggleAllVisibility() }
+            Button("Close All Pins") { PinnedScreenshotPanel.closeAll() }
+
             Divider()
+
+            // Desktop icons toggle
+            Button(DesktopIconManager.shared.iconsHidden ? "Show Desktop Icons" : "Hide Desktop Icons") {
+                if DesktopIconManager.shared.iconsHidden {
+                    DesktopIconManager.shared.showIcons()
+                } else {
+                    DesktopIconManager.shared.hideIcons()
+                }
+            }
+
+            Divider()
+
+            // History submenu
+            Menu("Recent Captures") {
+                let items = HistoryService.shared.recentCaptures(limit: 10)
+                if items.isEmpty {
+                    Text("No captures yet").foregroundColor(.secondary)
+                } else {
+                    ForEach(items, id: \.id) { item in
+                        Button("\(item.captureType) — \(formattedDate(item.timestamp))") {
+                            if let path = item.filePath {
+                                NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Divider()
+
+            // Preferences
+            Button("Preferences...") {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            }
+            .keyboardShortcut(",")
+
+            Divider()
+
             Text("Znap v0.1.0").foregroundColor(.secondary)
+
             Divider()
+
             Button("Quit") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")
         }
+
+        Settings {
+            PreferencesView()
+        }
+    }
+
+    /// Formats a date for display in the history submenu.
+    private func formattedDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
