@@ -22,7 +22,10 @@ enum BackgroundRenderer {
     // MARK: - Config
 
     /// Configuration controlling how the background is rendered.
-    struct Config {
+    /// Codable for persistence via UserDefaults. Equatable for SwiftUI onChange.
+    struct Config: Codable, Equatable {
+        /// Whether the background is enabled.
+        var enabled: Bool = false
         /// The type of background to draw behind the screenshot.
         var backgroundType: BackgroundType = .gradient(preset: 0)
         /// Padding in points around the screenshot.
@@ -33,22 +36,61 @@ enum BackgroundRenderer {
         var addShadow: Bool = true
         /// Optional aspect ratio constraint for the canvas.
         var aspectRatio: AspectRatio? = nil
+
+        // MARK: - Persistence
+
+        private static let userDefaultsKey = "backgroundConfig"
+
+        /// Loads the saved config from UserDefaults, or returns defaults.
+        static func load() -> Config {
+            guard let data = UserDefaults.standard.data(forKey: userDefaultsKey),
+                  let config = try? JSONDecoder().decode(Config.self, from: data) else {
+                return Config()
+            }
+            return config
+        }
+
+        /// Saves the config to UserDefaults.
+        func save() {
+            guard let data = try? JSONEncoder().encode(self) else { return }
+            UserDefaults.standard.set(data, forKey: Self.userDefaultsKey)
+        }
     }
 
     // MARK: - BackgroundType
 
     /// The kind of background drawn behind the screenshot.
-    enum BackgroundType {
+    enum BackgroundType: Codable, Equatable {
         /// A gradient selected from ``gradientPresets`` by index.
         case gradient(preset: Int)
-        /// A solid colour fill.
-        case solid(NSColor)
+        /// A solid colour fill, stored as RGBA components.
+        case solid(CodableColor)
+    }
+
+    /// A Codable colour representation for solid backgrounds.
+    struct CodableColor: Codable, Equatable {
+        var red: CGFloat
+        var green: CGFloat
+        var blue: CGFloat
+        var alpha: CGFloat
+
+        var nsColor: NSColor {
+            NSColor(red: red, green: green, blue: blue, alpha: alpha)
+        }
+
+        init(_ color: NSColor) {
+            let c = color.usingColorSpace(.sRGB) ?? color
+            self.red = c.redComponent
+            self.green = c.greenComponent
+            self.blue = c.blueComponent
+            self.alpha = c.alphaComponent
+        }
     }
 
     // MARK: - AspectRatio
 
     /// Supported canvas aspect ratios.
-    enum AspectRatio: String, CaseIterable {
+    enum AspectRatio: String, CaseIterable, Codable {
         case free
         case square
         case fourThree
@@ -139,8 +181,8 @@ enum BackgroundRenderer {
                 gradient.draw(in: canvasRect, angle: 135)
             }
 
-        case .solid(let color):
-            color.setFill()
+        case .solid(let codableColor):
+            codableColor.nsColor.setFill()
             canvasRect.fill()
         }
 

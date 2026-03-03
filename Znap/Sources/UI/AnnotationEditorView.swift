@@ -21,6 +21,7 @@ struct AnnotationEditorView: View {
     @State private var isLoadingSelection = false
     @State private var zoomLevel: CGFloat = 1.0
     @State private var zoomHost: MagnificationHostView?
+    @State private var backgroundConfig: BackgroundRenderer.Config = BackgroundRenderer.Config.load()
 
     /// The original NSImage, kept for rendering the base image in the canvas.
     private let baseImage: NSImage
@@ -75,12 +76,14 @@ struct AnnotationEditorView: View {
                 selectedTool: $selectedTool,
                 selectedColor: $selectedColor,
                 strokeWidth: $strokeWidth,
+                backgroundConfig: $backgroundConfig,
                 onUndo: undo,
                 onRedo: redo,
                 onCopy: copyToClipboard,
                 onSave: save,
                 canUndo: !undoStack.isEmpty,
                 canRedo: !redoStack.isEmpty,
+                baseImage: baseImage,
                 zoomLevel: zoomLevel,
                 onZoomIn: { zoomHost?.zoomIn() },
                 onZoomOut: { zoomHost?.zoomOut() },
@@ -91,84 +94,20 @@ struct AnnotationEditorView: View {
             Divider()
 
             ScrollView([.horizontal, .vertical]) {
-                AnnotationCanvasView(
-                    baseImage: baseImage,
-                    annotations: document.annotations,
-                    selectedTool: selectedTool,
-                    selectedColor: selectedColor,
-                    strokeWidth: strokeWidth,
-                    counterValue: counterValue,
-                    selectedAnnotationID: selectedAnnotationID,
-                    onAnnotationCreated: { annotation in
-                        commitAnnotation(annotation)
-                    },
-                    onAnnotationSelected: { id in
-                        selectedAnnotationID = id
-                        // Load selected annotation's properties into toolbar.
-                        if let annotation = document.annotations.first(where: { $0.id == id }) {
-                            isLoadingSelection = true
-                            selectedColor = annotation.color
-                            strokeWidth = annotation.strokeWidth
-                            isLoadingSelection = false
-                        }
-                    },
-                    onSelectionCleared: {
-                        selectedAnnotationID = nil
-                    },
-                    onAnnotationMoved: { id, delta in
-                        moveAnnotation(id, by: delta)
-                    },
-                    onMoveStarted: {
-                        undoStack.append(document.annotations)
-                        redoStack.removeAll()
-                    },
-                    onArrowHandleDragged: { id, handle, position in
-                        guard let index = document.annotations.firstIndex(where: { $0.id == id }) else { return }
-                        switch handle {
-                        case .start:
-                            document.annotations[index].startPoint = position
-                        case .end:
-                            document.annotations[index].endPoint = position
-                        case .curve:
-                            document.annotations[index].curveControlPoint = position
-                        }
-                    },
-                    onHandleDragStarted: {
-                        undoStack.append(document.annotations)
-                        redoStack.removeAll()
-                    },
-                    onCurveHandleReset: { id in
-                        guard let index = document.annotations.firstIndex(where: { $0.id == id }) else { return }
-                        undoStack.append(document.annotations)
-                        redoStack.removeAll()
-                        document.annotations[index].curveControlPoint = nil
-                    },
-                    onResizeStarted: {
-                        undoStack.append(document.annotations)
-                        redoStack.removeAll()
-                    },
-                    onTextResized: { id, newFontSize in
-                        guard let index = document.annotations.firstIndex(where: { $0.id == id }) else { return }
-                        document.annotations[index].fontSize = newFontSize
-                    },
-                    hoveredAnnotationID: hoveredAnnotationID,
-                    onHoverChanged: { id in
-                        hoveredAnnotationID = id
-                    }
-                )
-                .padding(20)
-                .background(
-                    MagnificationHost(
-                        initialMagnification: initialMagnification,
-                        onMagnificationChanged: { mag in
-                            zoomLevel = mag
-                        },
-                        onHostReady: { host in
-                            zoomHost = host
-                        }
+                canvasWithBackground
+                    .padding(20)
+                    .background(
+                        MagnificationHost(
+                            initialMagnification: initialMagnification,
+                            onMagnificationChanged: { mag in
+                                zoomLevel = mag
+                            },
+                            onHostReady: { host in
+                                zoomHost = host
+                            }
+                        )
+                        .frame(width: 0, height: 0)
                     )
-                    .frame(width: 0, height: 0)
-                )
             }
         }
         .frame(minWidth: 560, minHeight: 400)
@@ -188,6 +127,111 @@ struct AnnotationEditorView: View {
                let tool = AnnotationDocument.AnnotationType(rawValue: rawValue) {
                 selectedTool = tool
             }
+        }
+        .onChange(of: backgroundConfig) { newConfig in
+            newConfig.save()
+        }
+    }
+
+    // MARK: - Canvas with Background
+
+    /// Wraps the annotation canvas with an optional visual background preview.
+    @ViewBuilder
+    private var canvasWithBackground: some View {
+        let canvas = AnnotationCanvasView(
+            baseImage: baseImage,
+            annotations: document.annotations,
+            selectedTool: selectedTool,
+            selectedColor: selectedColor,
+            strokeWidth: strokeWidth,
+            counterValue: counterValue,
+            selectedAnnotationID: selectedAnnotationID,
+            onAnnotationCreated: { annotation in
+                commitAnnotation(annotation)
+            },
+            onAnnotationSelected: { id in
+                selectedAnnotationID = id
+                if let annotation = document.annotations.first(where: { $0.id == id }) {
+                    isLoadingSelection = true
+                    selectedColor = annotation.color
+                    strokeWidth = annotation.strokeWidth
+                    isLoadingSelection = false
+                }
+            },
+            onSelectionCleared: {
+                selectedAnnotationID = nil
+            },
+            onAnnotationMoved: { id, delta in
+                moveAnnotation(id, by: delta)
+            },
+            onMoveStarted: {
+                undoStack.append(document.annotations)
+                redoStack.removeAll()
+            },
+            onArrowHandleDragged: { id, handle, position in
+                guard let index = document.annotations.firstIndex(where: { $0.id == id }) else { return }
+                switch handle {
+                case .start:
+                    document.annotations[index].startPoint = position
+                case .end:
+                    document.annotations[index].endPoint = position
+                case .curve:
+                    document.annotations[index].curveControlPoint = position
+                }
+            },
+            onHandleDragStarted: {
+                undoStack.append(document.annotations)
+                redoStack.removeAll()
+            },
+            onCurveHandleReset: { id in
+                guard let index = document.annotations.firstIndex(where: { $0.id == id }) else { return }
+                undoStack.append(document.annotations)
+                redoStack.removeAll()
+                document.annotations[index].curveControlPoint = nil
+            },
+            onResizeStarted: {
+                undoStack.append(document.annotations)
+                redoStack.removeAll()
+            },
+            onTextResized: { id, newFontSize in
+                guard let index = document.annotations.firstIndex(where: { $0.id == id }) else { return }
+                document.annotations[index].fontSize = newFontSize
+            },
+            hoveredAnnotationID: hoveredAnnotationID,
+            onHoverChanged: { id in
+                hoveredAnnotationID = id
+            }
+        )
+
+        if backgroundConfig.enabled {
+            canvas
+                .clipShape(RoundedRectangle(cornerRadius: backgroundConfig.cornerRadius))
+                .shadow(
+                    color: backgroundConfig.addShadow ? .black.opacity(0.4) : .clear,
+                    radius: backgroundConfig.addShadow ? 20 : 0,
+                    y: backgroundConfig.addShadow ? 4 : 0
+                )
+                .padding(backgroundConfig.padding)
+                .background(backgroundGradient)
+        } else {
+            canvas
+        }
+    }
+
+    /// The background gradient or solid color for the live preview.
+    @ViewBuilder
+    private var backgroundGradient: some View {
+        switch backgroundConfig.backgroundType {
+        case .gradient(let preset):
+            let index = max(0, min(preset, BackgroundRenderer.gradientPresets.count - 1))
+            let colors = BackgroundRenderer.gradientPresets[index]
+            LinearGradient(
+                colors: [Color(nsColor: colors.0), Color(nsColor: colors.1)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .solid(let c):
+            Color(red: c.red, green: c.green, blue: c.blue, opacity: c.alpha)
         }
     }
 
@@ -339,6 +383,13 @@ struct AnnotationEditorView: View {
         }
 
         guard let resultCGImage = ctx.makeImage() else { return nil }
-        return NSImage(cgImage: resultCGImage, size: pointSize)
+        let composited = NSImage(cgImage: resultCGImage, size: pointSize)
+
+        // Apply background if enabled.
+        if backgroundConfig.enabled {
+            return BackgroundRenderer.render(screenshot: composited, config: backgroundConfig)
+        }
+
+        return composited
     }
 }

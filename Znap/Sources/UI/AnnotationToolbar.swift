@@ -9,6 +9,7 @@ struct AnnotationToolbar: View {
     @Binding var selectedTool: AnnotationDocument.AnnotationType
     @Binding var selectedColor: AnnotationDocument.CodableColor
     @Binding var strokeWidth: CGFloat
+    @Binding var backgroundConfig: BackgroundRenderer.Config
 
     // MARK: - Callbacks
 
@@ -20,6 +21,9 @@ struct AnnotationToolbar: View {
     var canUndo: Bool
     var canRedo: Bool
 
+    /// The base screenshot image for the background preview.
+    var baseImage: NSImage = NSImage()
+
     // MARK: - Zoom
 
     var zoomLevel: CGFloat = 1.0
@@ -27,6 +31,10 @@ struct AnnotationToolbar: View {
     var onZoomOut: () -> Void = {}
     var onZoomToFit: () -> Void = {}
     var onZoomToActualSize: () -> Void = {}
+
+    // MARK: - Background Popover
+
+    @State private var showBackgroundPopover = false
 
     // MARK: - Tool Definitions
 
@@ -85,6 +93,33 @@ struct AnnotationToolbar: View {
                 }
 
                 Spacer()
+
+                // Background toggle
+                Button {
+                    backgroundConfig.enabled.toggle()
+                    if backgroundConfig.enabled {
+                        showBackgroundPopover = true
+                    }
+                } label: {
+                    Image(systemName: "rectangle.inset.filled")
+                        .frame(width: 26, height: 26)
+                }
+                .buttonStyle(.plain)
+                .background(
+                    backgroundConfig.enabled
+                        ? Color.accentColor.opacity(0.25)
+                        : Color.clear
+                )
+                .cornerRadius(6)
+                .help("Background")
+                .popover(isPresented: $showBackgroundPopover) {
+                    BackgroundToolView(
+                        screenshot: baseImage,
+                        config: $backgroundConfig
+                    )
+                }
+
+                Divider().frame(height: 20)
 
                 // Undo / Redo
                 Button(action: onUndo) {
