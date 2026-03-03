@@ -20,6 +20,14 @@ struct AnnotationToolbar: View {
     var canUndo: Bool
     var canRedo: Bool
 
+    // MARK: - Zoom
+
+    var zoomLevel: CGFloat = 1.0
+    var onZoomIn: () -> Void = {}
+    var onZoomOut: () -> Void = {}
+    var onZoomToFit: () -> Void = {}
+    var onZoomToActualSize: () -> Void = {}
+
     // MARK: - Tool Definitions
 
     /// Maps each annotation type to a system image name.
@@ -36,6 +44,7 @@ struct AnnotationToolbar: View {
         (.spotlight, "sun.max"),
         (.highlighter, "highlighter"),
         (.pencil, "pencil"),
+        (.handwriting, "pencil.tip"),
     ]
 
     // MARK: - Colour Palette
@@ -155,6 +164,37 @@ struct AnnotationToolbar: View {
                     .frame(width: 20)
 
                 Spacer()
+
+                Divider().frame(height: 18).padding(.horizontal, 4)
+
+                // Zoom controls
+                Button(action: onZoomOut) {
+                    Image(systemName: "minus.magnifyingglass")
+                }
+                .buttonStyle(.plain)
+                .help("Zoom Out (⌘−)")
+
+                Text("\(Int(zoomLevel * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .frame(width: 40, alignment: .center)
+
+                Button(action: onZoomIn) {
+                    Image(systemName: "plus.magnifyingglass")
+                }
+                .buttonStyle(.plain)
+                .help("Zoom In (⌘+)")
+
+                Button(action: onZoomToFit) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                }
+                .buttonStyle(.plain)
+                .help("Zoom to Fit (⌘0)")
+
+                Button(action: onZoomToActualSize) {
+                    Image(systemName: "1.magnifyingglass")
+                }
+                .buttonStyle(.plain)
+                .help("Actual Size (⌘1)")
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)

@@ -25,6 +25,7 @@ struct AnnotationDocument: Codable {
         case arrow, rectangle, filledRectangle, ellipse, line
         case text, counter, pixelate, blur, spotlight
         case highlighter, pencil
+        case handwriting
     }
 
     // MARK: - Annotation
@@ -43,6 +44,7 @@ struct AnnotationDocument: Codable {
         var fontSize: CGFloat?
         var counterValue: Int?
         var isFilled: Bool
+        var curveControlPoint: CGPoint?
     }
 
     // MARK: - CodableColor

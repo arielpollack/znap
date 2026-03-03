@@ -8,6 +8,12 @@ import CoreText
 /// instead of SwiftUI's `Canvas` / `GraphicsContext`.
 enum AnnotationRenderer {
 
+    // MARK: - Shadow Parameters
+
+    private static let shadowColor = CGColor(red: 0, green: 0, blue: 0, alpha: 0.25)
+    private static let shadowOffset = CGSize(width: 0, height: 2)
+    private static let shadowBlur: CGFloat = 4
+
     // MARK: - Public API
 
     /// Draws a single annotation into the given Core Graphics context.
@@ -28,6 +34,7 @@ enum AnnotationRenderer {
 
         switch annotation.type {
         case .arrow:
+            ctx.setShadow(offset: shadowOffset, blur: shadowBlur, color: shadowColor)
             drawArrow(annotation, in: ctx, color: color, lineWidth: lineWidth)
 
         case .rectangle:
@@ -68,9 +75,15 @@ enum AnnotationRenderer {
             )
 
         case .text:
+            ctx.setShadow(offset: shadowOffset, blur: shadowBlur, color: shadowColor)
             drawText(annotation, in: ctx)
 
+        case .handwriting:
+            ctx.setShadow(offset: shadowOffset, blur: shadowBlur, color: shadowColor)
+            drawHandwriting(annotation, in: ctx)
+
         case .counter:
+            ctx.setShadow(offset: shadowOffset, blur: shadowBlur, color: shadowColor)
             drawCounter(annotation, in: ctx)
 
         case .pixelate:
@@ -104,11 +117,20 @@ enum AnnotationRenderer {
 
         // Shaft
         ctx.move(to: start)
-        ctx.addLine(to: end)
+        if let cp = annotation.curveControlPoint {
+            ctx.addQuadCurve(to: end, control: cp)
+        } else {
+            ctx.addLine(to: end)
+        }
         ctx.strokePath()
 
-        // Arrowhead
-        let angle = atan2(end.y - start.y, end.x - start.x)
+        // Arrowhead — compute angle from tangent direction at endpoint.
+        let angle: CGFloat
+        if let cp = annotation.curveControlPoint {
+            angle = atan2(end.y - cp.y, end.x - cp.x)
+        } else {
+            angle = atan2(end.y - start.y, end.x - start.x)
+        }
         let headLength: CGFloat = 15
         let headAngle: CGFloat = .pi / 6
 
@@ -169,6 +191,34 @@ enum AnnotationRenderer {
 
         ctx.saveGState()
         // CoreGraphics has Y-up; if the context is flipped we need to account for that.
+        ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+        ctx.textPosition = CGPoint(x: annotation.startPoint.x,
+                                   y: annotation.startPoint.y + fontSize)
+        CTLineDraw(line, ctx)
+        ctx.restoreGState()
+    }
+
+    // MARK: - Handwriting
+
+    private static func drawHandwriting(
+        _ annotation: AnnotationDocument.Annotation,
+        in ctx: CGContext
+    ) {
+        guard let string = annotation.text, !string.isEmpty else { return }
+
+        let fontSize = annotation.fontSize ?? 24
+        let font = CTFontCreateWithName("Bradley Hand" as CFString, fontSize, nil)
+        let color = annotation.color.nsColor
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: color,
+        ]
+
+        let attributedString = NSAttributedString(string: string, attributes: attributes)
+        let line = CTLineCreateWithAttributedString(attributedString)
+
+        ctx.saveGState()
         ctx.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
         ctx.textPosition = CGPoint(x: annotation.startPoint.x,
                                    y: annotation.startPoint.y + fontSize)

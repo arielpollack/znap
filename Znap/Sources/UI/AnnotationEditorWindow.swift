@@ -61,6 +61,48 @@ final class AnnotationEditorWindow: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
+    // MARK: - Keyboard Shortcuts
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown else { return super.performKeyEquivalent(with: event) }
+
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        if flags == .command {
+            switch event.charactersIgnoringModifiers {
+            case "z":
+                NotificationCenter.default.post(name: .annotationUndo, object: nil)
+                return true
+            case "c":
+                NotificationCenter.default.post(name: .annotationCopy, object: nil)
+                return true
+            case "s":
+                NotificationCenter.default.post(name: .annotationSave, object: nil)
+                return true
+            default:
+                break
+            }
+        }
+
+        if flags == [.command, .shift] {
+            if event.charactersIgnoringModifiers == "z" {
+                NotificationCenter.default.post(name: .annotationRedo, object: nil)
+                return true
+            }
+        }
+
+        if flags.isEmpty || flags == .function {
+            let keyCode = event.keyCode
+            // Delete (51) or Forward Delete (117)
+            if keyCode == 51 || keyCode == 117 {
+                NotificationCenter.default.post(name: .annotationDelete, object: nil)
+                return true
+            }
+        }
+
+        return super.performKeyEquivalent(with: event)
+    }
+
     // MARK: - Public API
 
     /// Creates and displays an annotation editor window for the given image.
@@ -92,4 +134,14 @@ final class AnnotationEditorWindow: NSPanel {
 
     /// Whether an editor window currently exists.
     static var hasEditor: Bool { current != nil }
+}
+
+// MARK: - Annotation Notification Names
+
+extension Notification.Name {
+    static let annotationUndo   = Notification.Name("annotationUndo")
+    static let annotationRedo   = Notification.Name("annotationRedo")
+    static let annotationCopy   = Notification.Name("annotationCopy")
+    static let annotationSave   = Notification.Name("annotationSave")
+    static let annotationDelete = Notification.Name("annotationDelete")
 }

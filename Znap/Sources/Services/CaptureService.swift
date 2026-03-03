@@ -84,9 +84,9 @@ final class CaptureService {
 
     /// Area capture using `SCScreenshotManager` (macOS 14+).
     ///
-    /// Captures the full display at Retina resolution, then crops to the
-    /// requested rect. This avoids coordinate system issues between AppKit
-    /// (bottom-left origin) and ScreenCaptureKit (top-left origin).
+    /// Captures the full display at its native pixel resolution, then crops to
+    /// the requested rect. Coordinates are converted from AppKit (bottom-left
+    /// origin) to CoreGraphics (top-left origin) using the primary screen height.
     @available(macOS 14.0, *)
     private func captureAreaWithScreenCaptureKit(_ rect: CGRect) async throws -> CGImage {
         let content = try await shareableContent()
@@ -94,8 +94,8 @@ final class CaptureService {
             throw CaptureError.noDisplay
         }
 
-        // Use NSScreen's backingScaleFactor for reliable Retina pixel size.
-        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        // Use the target display's backingScaleFactor, not the main screen's.
+        let scale = Self.backingScaleFactor(for: display)
         let displayFrame = display.frame
 
         // Capture the full display at Retina pixel resolution.
@@ -109,8 +109,9 @@ final class CaptureService {
         let fullImage = try await captureImage(filter: filter, configuration: config)
 
         // Convert NS rect (bottom-left origin) to pixel crop rect (top-left origin).
-        let screenHeight = NSScreen.screens.reduce(CGFloat(0)) { max($0, $1.frame.maxY) }
-        let cgRectOriginY = screenHeight - rect.origin.y - rect.height
+        // Primary screen height is the reference for NS↔CG conversion.
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? displayFrame.height
+        let cgRectOriginY = primaryHeight - rect.origin.y - rect.height
         let localX = (rect.origin.x - displayFrame.origin.x) * scale
         let localY = (cgRectOriginY - displayFrame.origin.y) * scale
         let cropW = rect.width * scale
@@ -212,9 +213,9 @@ final class CaptureService {
     ///   - displays: The list of available displays.
     /// - Returns: The `SCDisplay` containing the point, or `nil` if none match.
     private func display(containing nsPoint: CGPoint, in displays: [SCDisplay]) -> SCDisplay? {
-        // Total screen height for NS→CG y conversion.
-        let screenHeight = NSScreen.screens.reduce(CGFloat(0)) { max($0, $1.frame.maxY) }
-        let cgPoint = CGPoint(x: nsPoint.x, y: screenHeight - nsPoint.y)
+        // Primary screen height is the reference for NS→CG y conversion.
+        let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+        let cgPoint = CGPoint(x: nsPoint.x, y: primaryHeight - nsPoint.y)
         return displays.first { $0.frame.contains(cgPoint) }
     }
 
@@ -224,6 +225,19 @@ final class CaptureService {
     static func scaleFactor(for display: SCDisplay) -> CGFloat {
         guard display.frame.width > 0 else { return 1.0 }
         return CGFloat(display.width) / display.frame.width
+    }
+
+    /// Returns the `backingScaleFactor` for the NSScreen matching the given SCDisplay.
+    ///
+    /// Falls back to `NSScreen.main?.backingScaleFactor` if no matching screen is found.
+    static func backingScaleFactor(for display: SCDisplay) -> CGFloat {
+        for screen in NSScreen.screens {
+            if let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+               screenNumber == display.displayID {
+                return screen.backingScaleFactor
+            }
+        }
+        return NSScreen.main?.backingScaleFactor ?? 2.0
     }
 
     /// Perform the actual screenshot capture using `SCScreenshotManager` (macOS 14+).

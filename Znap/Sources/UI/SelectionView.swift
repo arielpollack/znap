@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 
 /// A custom NSView that handles mouse and keyboard events for interactive
 /// screen-region selection.
@@ -141,36 +142,42 @@ final class SelectionView: NSView {
     }
 
     /// Draws a "W x H" dimension label centered below the selection rectangle.
+    /// Uses CoreText directly to avoid NSString.draw crashes on remote displays.
     private func drawDimensionLabel(for rect: CGRect) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
         let w = Int(rect.width)
         let h = Int(rect.height)
         let text = "\(w) \u{00D7} \(h)"
 
-        let font = NSFont.monospacedSystemFont(ofSize: 12, weight: .medium)
+        let font = CTFontCreateWithName("Menlo" as CFString, 12, nil)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor.white,
         ]
+        let attrString = NSAttributedString(string: text, attributes: attributes)
+        let line = CTLineCreateWithAttributedString(attrString)
+        let textBounds = CTLineGetBoundsWithOptions(line, .useOpticalBounds)
 
-        let textSize = (text as NSString).size(withAttributes: attributes)
-
-        // Position the label centered below the selection, with a small gap.
-        let labelX = rect.midX - textSize.width / 2
-        let labelY = rect.minY - textSize.height - 6
+        let labelX = rect.midX - textBounds.width / 2
+        let labelY = rect.minY - textBounds.height - 6
 
         // Draw a small rounded background behind the label for readability.
         let padding: CGFloat = 4
         let backgroundRect = CGRect(
             x: labelX - padding,
             y: labelY - padding / 2,
-            width: textSize.width + padding * 2,
-            height: textSize.height + padding
+            width: textBounds.width + padding * 2,
+            height: textBounds.height + padding
         )
 
         let backgroundPath = NSBezierPath(roundedRect: backgroundRect, xRadius: 4, yRadius: 4)
         NSColor.black.withAlphaComponent(0.7).setFill()
         backgroundPath.fill()
 
-        (text as NSString).draw(at: NSPoint(x: labelX, y: labelY), withAttributes: attributes)
+        context.saveGState()
+        context.textMatrix = .identity
+        context.textPosition = CGPoint(x: labelX, y: labelY)
+        CTLineDraw(line, context)
+        context.restoreGState()
     }
 }
