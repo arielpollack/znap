@@ -51,6 +51,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
             handler: { [weak self] in self?.startOCRCapture() }
         )
+
+        // Cmd+Shift+7 for scrolling capture (kVK_ANSI_7)
+        HotkeyService.shared.register(
+            keyCode: UInt32(kVK_ANSI_7),
+            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
+            handler: { [weak self] in self?.startScrollCapture() }
+        )
     }
 
     func startAreaCapture() {
@@ -171,6 +178,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             trigger: nil
         )
         UNUserNotificationCenter.current().add(request)
+    }
+
+    func startScrollCapture() {
+        OverlayWindow.beginAreaSelection { rect in
+            guard let rect = rect else { return }
+            Task {
+                do {
+                    let cgImage = try await ScrollCaptureService.shared.captureScrolling(in: rect)
+                    let nsImage = NSImage(
+                        cgImage: cgImage,
+                        size: NSSize(width: cgImage.width, height: cgImage.height)
+                    )
+                    await MainActor.run {
+                        QuickAccessOverlay.show(image: nsImage)
+                    }
+                } catch {
+                    print("Scroll capture failed: \(error)")
+                }
+            }
+        }
     }
 
     func toggleRecording() {

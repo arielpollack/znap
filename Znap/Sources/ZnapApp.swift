@@ -12,6 +12,7 @@ struct ZnapApp: App {
             Button("Freeze & Capture (\u{2318}\u{21e7}6)") { appDelegate.startFreezeCapture() }
             Divider()
             Button("OCR Text (\u{2318}\u{21e7}2)") { appDelegate.startOCRCapture() }
+            Button("Scrolling Capture (\u{2318}\u{21e7}7)") { appDelegate.startScrollCapture() }
             Divider()
             Button("Record Screen (\u{2318}\u{21e7}R)") { appDelegate.toggleRecording() }
             Divider()
