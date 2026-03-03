@@ -72,7 +72,7 @@ struct AnnotationEditorView: View {
                 .padding(20)
             }
         }
-        .frame(minWidth: 400, minHeight: 300)
+        .frame(minWidth: 560, minHeight: 400)
     }
 
     // MARK: - Annotation Commit
@@ -143,17 +143,24 @@ struct AnnotationEditorView: View {
     /// Composites the base image and all annotations into a single `NSImage`
     /// using ``AnnotationRenderer``.
     private func renderFinalImage() -> NSImage? {
-        let size = document.canvasSize
-        guard size.width > 0, size.height > 0 else { return nil }
+        let pointSize = document.canvasSize
+        guard pointSize.width > 0, pointSize.height > 0 else { return nil }
 
-        let width = Int(size.width)
-        let height = Int(size.height)
+        // Get actual pixel dimensions from the bitmap rep for full-resolution export.
+        guard let tiffData = baseImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let cgImage = bitmap.cgImage else { return nil }
+
+        let pixelWidth = cgImage.width
+        let pixelHeight = cgImage.height
+        let scaleX = CGFloat(pixelWidth) / pointSize.width
+        let scaleY = CGFloat(pixelHeight) / pointSize.height
         let colorSpace = CGColorSpaceCreateDeviceRGB()
 
         guard let ctx = CGContext(
             data: nil,
-            width: width,
-            height: height,
+            width: pixelWidth,
+            height: pixelHeight,
             bitsPerComponent: 8,
             bytesPerRow: 0,
             space: colorSpace,
@@ -161,22 +168,21 @@ struct AnnotationEditorView: View {
         ) else { return nil }
 
         // Flip context to match top-left origin (matches SwiftUI coordinate system).
-        ctx.translateBy(x: 0, y: CGFloat(height))
+        ctx.translateBy(x: 0, y: CGFloat(pixelHeight))
         ctx.scaleBy(x: 1, y: -1)
 
-        // Draw base image.
-        if let tiffData = baseImage.tiffRepresentation,
-           let bitmap = NSBitmapImageRep(data: tiffData),
-           let cgImage = bitmap.cgImage {
-            ctx.draw(cgImage, in: CGRect(origin: .zero, size: size))
+        // Scale context so point-based annotations map to pixel coordinates.
+        ctx.scaleBy(x: scaleX, y: scaleY)
 
-            // Draw all annotations.
-            for annotation in document.annotations {
-                AnnotationRenderer.draw(annotation, in: ctx, baseImage: cgImage)
-            }
+        // Draw base image.
+        ctx.draw(cgImage, in: CGRect(origin: .zero, size: pointSize))
+
+        // Draw all annotations (in point coordinates, scaled by context).
+        for annotation in document.annotations {
+            AnnotationRenderer.draw(annotation, in: ctx, baseImage: cgImage)
         }
 
         guard let resultCGImage = ctx.makeImage() else { return nil }
-        return NSImage(cgImage: resultCGImage, size: size)
+        return NSImage(cgImage: resultCGImage, size: pointSize)
     }
 }

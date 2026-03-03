@@ -83,6 +83,10 @@ final class CaptureService {
     // MARK: - macOS 14+ ScreenCaptureKit Implementations
 
     /// Area capture using `SCScreenshotManager` (macOS 14+).
+    ///
+    /// Captures the full display at Retina resolution, then crops to the
+    /// requested rect. This avoids coordinate system issues between AppKit
+    /// (bottom-left origin) and ScreenCaptureKit (top-left origin).
     @available(macOS 14.0, *)
     private func captureAreaWithScreenCaptureKit(_ rect: CGRect) async throws -> CGImage {
         let content = try await shareableContent()
@@ -90,23 +94,34 @@ final class CaptureService {
             throw CaptureError.noDisplay
         }
 
-        let scaleFactor = Self.scaleFactor(for: display)
+        // Use NSScreen's backingScaleFactor for reliable Retina pixel size.
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        let displayFrame = display.frame
 
+        // Capture the full display at Retina pixel resolution.
         let filter = SCContentFilter(display: display, excludingWindows: [])
-
         let config = SCStreamConfiguration()
-        config.sourceRect = CGRect(
-            x: rect.origin.x * scaleFactor,
-            y: rect.origin.y * scaleFactor,
-            width: rect.width * scaleFactor,
-            height: rect.height * scaleFactor
-        )
-        config.width = Int(rect.width * scaleFactor)
-        config.height = Int(rect.height * scaleFactor)
+        config.width = Int(displayFrame.width * scale)
+        config.height = Int(displayFrame.height * scale)
         config.showsCursor = false
         config.capturesAudio = false
 
-        return try await captureImage(filter: filter, configuration: config)
+        let fullImage = try await captureImage(filter: filter, configuration: config)
+
+        // Convert NS rect (bottom-left origin) to pixel crop rect (top-left origin).
+        let screenHeight = NSScreen.screens.reduce(CGFloat(0)) { max($0, $1.frame.maxY) }
+        let cgRectOriginY = screenHeight - rect.origin.y - rect.height
+        let localX = (rect.origin.x - displayFrame.origin.x) * scale
+        let localY = (cgRectOriginY - displayFrame.origin.y) * scale
+        let cropW = rect.width * scale
+        let cropH = rect.height * scale
+
+        let cropRect = CGRect(x: localX, y: localY, width: cropW, height: cropH)
+
+        guard let cropped = fullImage.cropping(to: cropRect) else {
+            throw CaptureError.captureFailed
+        }
+        return cropped
     }
 
     /// Fullscreen capture using `SCScreenshotManager` (macOS 14+).
@@ -129,11 +144,12 @@ final class CaptureService {
             display = first
         }
 
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
         let filter = SCContentFilter(display: display, excludingWindows: [])
 
         let config = SCStreamConfiguration()
-        config.width = display.width
-        config.height = display.height
+        config.width = Int(display.frame.width * scale)
+        config.height = Int(display.frame.height * scale)
         config.showsCursor = false
         config.capturesAudio = false
 
@@ -187,12 +203,19 @@ final class CaptureService {
 
     /// Find the display whose frame contains the given point.
     ///
+    /// The point is in AppKit (NS) coordinates (bottom-left origin). SCDisplay
+    /// frames are in CG coordinates (top-left origin). We convert the NS point
+    /// to CG coordinates using the primary screen height.
+    ///
     /// - Parameters:
-    ///   - point: A point in screen coordinates.
+    ///   - nsPoint: A point in NS screen coordinates.
     ///   - displays: The list of available displays.
     /// - Returns: The `SCDisplay` containing the point, or `nil` if none match.
-    private func display(containing point: CGPoint, in displays: [SCDisplay]) -> SCDisplay? {
-        displays.first { $0.frame.contains(point) }
+    private func display(containing nsPoint: CGPoint, in displays: [SCDisplay]) -> SCDisplay? {
+        // Total screen height for NS→CG y conversion.
+        let screenHeight = NSScreen.screens.reduce(CGFloat(0)) { max($0, $1.frame.maxY) }
+        let cgPoint = CGPoint(x: nsPoint.x, y: screenHeight - nsPoint.y)
+        return displays.first { $0.frame.contains(cgPoint) }
     }
 
     /// Compute the scale factor (pixels per point) for a given display.

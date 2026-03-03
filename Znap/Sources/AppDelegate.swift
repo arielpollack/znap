@@ -120,18 +120,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AllInOneHUD.show(with: modes)
     }
 
+    /// Creates an NSImage from a CGImage with point dimensions for 1:1 Retina display.
+    ///
+    /// Sets NSImage.size to point dimensions (pixels / backingScaleFactor) so that
+    /// each image pixel maps to exactly one screen pixel on Retina displays.
+    private static func nsImage(from cgImage: CGImage) -> NSImage {
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        return NSImage(
+            cgImage: cgImage,
+            size: NSSize(
+                width: CGFloat(cgImage.width) / scale,
+                height: CGFloat(cgImage.height) / scale
+            )
+        )
+    }
+
+    /// Shows the captured image — either in the annotation editor (if autoOpenEditor
+    /// is enabled) or in the Quick Access Overlay thumbnail.
+    private func showCaptureResult(_ nsImage: NSImage) {
+        if UserDefaults.standard.bool(forKey: "autoOpenEditor") {
+            AnnotationEditorWindow.open(with: nsImage)
+        } else {
+            QuickAccessOverlay.show(image: nsImage)
+        }
+    }
+
     func startAreaCapture() {
         OverlayWindow.beginAreaSelection { rect in
             guard let rect = rect else { return }
             Task {
                 do {
                     let cgImage = try await CaptureService.shared.captureArea(rect)
-                    let nsImage = NSImage(
-                        cgImage: cgImage,
-                        size: NSSize(width: cgImage.width, height: cgImage.height)
-                    )
+                    let nsImage = Self.nsImage(from: cgImage)
                     await MainActor.run {
-                        QuickAccessOverlay.show(image: nsImage)
+                        self.showCaptureResult(nsImage)
                     }
                 } catch {
                     print("Capture failed: \(error)")
@@ -144,12 +166,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             do {
                 let cgImage = try await CaptureService.shared.captureFullscreen()
-                let nsImage = NSImage(
-                    cgImage: cgImage,
-                    size: NSSize(width: cgImage.width, height: cgImage.height)
-                )
+                let nsImage = NSImage(cgImage: cgImage, size: .zero)
+                nsImage.size = NSSize(width: cgImage.width, height: cgImage.height)
                 await MainActor.run {
-                    QuickAccessOverlay.show(image: nsImage)
+                    self.showCaptureResult(nsImage)
                 }
             } catch {
                 print("Capture failed: \(error)")
@@ -163,12 +183,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task {
                 do {
                     let cgImage = try await CaptureService.shared.captureWindow(windowID)
-                    let nsImage = NSImage(
-                        cgImage: cgImage,
-                        size: NSSize(width: cgImage.width, height: cgImage.height)
-                    )
+                    let nsImage = Self.nsImage(from: cgImage)
                     await MainActor.run {
-                        QuickAccessOverlay.show(image: nsImage)
+                        self.showCaptureResult(nsImage)
                     }
                 } catch {
                     print("Window capture failed: \(error)")
@@ -183,12 +200,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task {
                 do {
                     let cgImage = try await CaptureService.shared.captureArea(rect)
-                    let nsImage = NSImage(
-                        cgImage: cgImage,
-                        size: NSSize(width: cgImage.width, height: cgImage.height)
-                    )
+                    let nsImage = Self.nsImage(from: cgImage)
                     await MainActor.run {
-                        QuickAccessOverlay.show(image: nsImage)
+                        self.showCaptureResult(nsImage)
                     }
                 } catch {
                     print("Freeze capture failed: \(error)")
@@ -246,12 +260,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task {
                 do {
                     let cgImage = try await ScrollCaptureService.shared.captureScrolling(in: rect)
-                    let nsImage = NSImage(
-                        cgImage: cgImage,
-                        size: NSSize(width: cgImage.width, height: cgImage.height)
-                    )
+                    let nsImage = Self.nsImage(from: cgImage)
                     await MainActor.run {
-                        QuickAccessOverlay.show(image: nsImage)
+                        self.showCaptureResult(nsImage)
                     }
                 } catch {
                     print("Scroll capture failed: \(error)")
@@ -275,11 +286,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         at: .zero,
                         actualTime: nil
                     ) {
-                        let thumbnail = NSImage(
-                            cgImage: cgImage,
-                            size: NSSize(width: cgImage.width, height: cgImage.height)
-                        )
-                        QuickAccessOverlay.show(image: thumbnail)
+                        let thumbnail = Self.nsImage(from: cgImage)
+                        self.showCaptureResult(thumbnail)
                     }
                 }
             } else {

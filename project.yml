@@ -6,7 +6,8 @@ options:
   xcodeVersion: "15.0"
 settings:
   SWIFT_VERSION: "5.9"
-  CODE_SIGN_IDENTITY: "-"
+  CODE_SIGN_STYLE: Automatic
+  DEVELOPMENT_TEAM: F92RQULD22
 targets:
   Znap:
     type: application

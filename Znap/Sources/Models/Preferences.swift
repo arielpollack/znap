@@ -35,6 +35,10 @@ final class ZnapPreferences: ObservableObject {
     /// Whether to automatically hide desktop icons before each capture.
     @AppStorage("autoHideDesktopIcons") var autoHideDesktopIcons = false
 
+    /// Whether to open the annotation editor immediately after capture
+    /// instead of showing the Quick Access Overlay thumbnail.
+    @AppStorage("autoOpenEditor") var autoOpenEditor = false
+
     // MARK: - Recording
 
     /// Frames per second for screen recordings.

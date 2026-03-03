@@ -28,6 +28,10 @@ struct ZnapApp: App {
 
             Divider()
 
+            Button("Show Editor") { AnnotationEditorWindow.restore() }
+
+            Divider()
+
             // Pins
             Button("Toggle Pins (\u{2318}\u{21e7}P)") { PinnedScreenshotPanel.toggleAllVisibility() }
             Button("Close All Pins") { PinnedScreenshotPanel.closeAll() }
@@ -65,7 +69,7 @@ struct ZnapApp: App {
 
             // Preferences
             Button("Preferences...") {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                PreferencesWindow.show()
             }
             .keyboardShortcut(",")
 
@@ -80,7 +84,7 @@ struct ZnapApp: App {
         }
 
         Settings {
-            PreferencesView()
+            EmptyView()
         }
     }
 

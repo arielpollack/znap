@@ -55,100 +55,110 @@ struct AnnotationToolbar: View {
     // MARK: - Body
 
     var body: some View {
-        HStack(spacing: 4) {
-            // Tool buttons
-            ForEach(Self.tools, id: \.0) { tool, icon in
-                Button {
-                    selectedTool = tool
-                } label: {
-                    Image(systemName: icon)
-                        .frame(width: 28, height: 28)
+        VStack(spacing: 0) {
+            // Row 1: Tools
+            HStack(spacing: 4) {
+                ForEach(Self.tools, id: \.0) { tool, icon in
+                    Button {
+                        selectedTool = tool
+                    } label: {
+                        Image(systemName: icon)
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .background(
+                        selectedTool == tool
+                            ? Color.accentColor.opacity(0.25)
+                            : Color.clear
+                    )
+                    .cornerRadius(6)
+                    .help(tool.rawValue)
+                }
+
+                Spacer()
+
+                // Undo / Redo
+                Button(action: onUndo) {
+                    Image(systemName: "arrow.uturn.backward")
                 }
                 .buttonStyle(.plain)
-                .background(
-                    selectedTool == tool
-                        ? Color.accentColor.opacity(0.25)
-                        : Color.clear
-                )
-                .cornerRadius(6)
-                .help(tool.rawValue)
-            }
+                .disabled(!canUndo)
+                .help("Undo (⌘Z)")
 
-            Divider().frame(height: 24).padding(.horizontal, 4)
-
-            // Colour palette
-            ForEach(Self.paletteColors, id: \.0) { name, codableColor in
-                Button {
-                    selectedColor = codableColor
-                } label: {
-                    Circle()
-                        .fill(Color(
-                            red: codableColor.red,
-                            green: codableColor.green,
-                            blue: codableColor.blue,
-                            opacity: codableColor.alpha
-                        ))
-                        .frame(width: 18, height: 18)
-                        .overlay(
-                            Circle()
-                                .strokeBorder(
-                                    selectedColor == codableColor
-                                        ? Color.primary
-                                        : Color.clear,
-                                    lineWidth: 2
-                                )
-                        )
+                Button(action: onRedo) {
+                    Image(systemName: "arrow.uturn.forward")
                 }
                 .buttonStyle(.plain)
-                .help(name)
+                .disabled(!canRedo)
+                .help("Redo (⌘⇧Z)")
+
+                Divider().frame(height: 20)
+
+                // Copy / Save
+                Button(action: onCopy) {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.plain)
+                .help("Copy to Clipboard (⌘C)")
+
+                Button(action: onSave) {
+                    Image(systemName: "square.and.arrow.down")
+                }
+                .buttonStyle(.plain)
+                .help("Save (⌘S)")
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
 
-            // Custom colour picker
-            ColorPicker("", selection: customColorBinding)
-                .labelsHidden()
-                .frame(width: 24)
+            Divider()
 
-            Divider().frame(height: 24).padding(.horizontal, 4)
+            // Row 2: Colors + stroke width
+            HStack(spacing: 4) {
+                ForEach(Self.paletteColors, id: \.0) { name, codableColor in
+                    Button {
+                        selectedColor = codableColor
+                    } label: {
+                        Circle()
+                            .fill(Color(
+                                red: codableColor.red,
+                                green: codableColor.green,
+                                blue: codableColor.blue,
+                                opacity: codableColor.alpha
+                            ))
+                            .frame(width: 16, height: 16)
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(
+                                        selectedColor == codableColor
+                                            ? Color.primary
+                                            : Color.clear,
+                                        lineWidth: 2
+                                    )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(name)
+                }
 
-            // Stroke width slider
-            Text("Width:")
-                .font(.caption)
-            Slider(value: $strokeWidth, in: 1...20, step: 1)
-                .frame(width: 80)
-            Text("\(Int(strokeWidth))")
-                .font(.caption)
-                .frame(width: 20)
+                ColorPicker("", selection: customColorBinding)
+                    .labelsHidden()
+                    .frame(width: 24)
 
-            Divider().frame(height: 24).padding(.horizontal, 4)
+                Divider().frame(height: 18).padding(.horizontal, 4)
 
-            // Undo / Redo
-            Button(action: onUndo) {
-                Image(systemName: "arrow.uturn.backward")
+                Text("Width:")
+                    .font(.caption)
+                Slider(value: $strokeWidth, in: 1...20, step: 1)
+                    .frame(width: 80)
+                Text("\(Int(strokeWidth))")
+                    .font(.caption)
+                    .frame(width: 20)
+
+                Spacer()
             }
-            .disabled(!canUndo)
-            .help("Undo")
-
-            Button(action: onRedo) {
-                Image(systemName: "arrow.uturn.forward")
-            }
-            .disabled(!canRedo)
-            .help("Redo")
-
-            Divider().frame(height: 24).padding(.horizontal, 4)
-
-            // Copy / Save
-            Button(action: onCopy) {
-                Image(systemName: "doc.on.doc")
-            }
-            .help("Copy to Clipboard")
-
-            Button(action: onSave) {
-                Image(systemName: "square.and.arrow.down")
-            }
-            .help("Save")
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
     }
 
     // MARK: - Custom Colour Binding

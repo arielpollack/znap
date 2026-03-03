@@ -67,6 +67,8 @@ struct PreferencesView: View {
                     .frame(width: 30, alignment: .trailing)
             }
 
+            Toggle("Open Editor After Capture", isOn: $prefs.autoOpenEditor)
+                .help("Skip the thumbnail and open the annotation editor immediately.")
             Toggle("Include Window Shadow", isOn: $prefs.includeWindowShadow)
             Toggle("Auto-Hide Desktop Icons", isOn: $prefs.autoHideDesktopIcons)
         }

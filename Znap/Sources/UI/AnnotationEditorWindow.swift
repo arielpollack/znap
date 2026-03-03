@@ -18,15 +18,22 @@ final class AnnotationEditorWindow: NSPanel {
     ///
     /// - Parameter image: The captured screenshot to annotate.
     private init(image: NSImage) {
-        // Compute a comfortable window size clamped to reasonable maximums.
-        let padding: CGFloat = 40
         let toolbarHeight: CGFloat = 60
-        let maxWidth: CGFloat = 1200
-        let maxHeight: CGFloat = 800
-        let width = min(image.size.width + padding, maxWidth)
-        let height = min(image.size.height + toolbarHeight + padding, maxHeight)
+        let padding: CGFloat = 40
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
 
-        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+        // Image point dimensions (already scaled for Retina).
+        let imgW = image.size.width
+        let imgH = image.size.height
+
+        // Desired window size = image + chrome, capped to screen.
+        let maxW = screenFrame.width - 40
+        let maxH = screenFrame.height - 40
+        let contentW = imgW + padding
+        let contentH = imgH + toolbarHeight + padding
+        let width = min(contentW, maxW)
+        let height = min(contentH, maxH)
+
         let originX = screenFrame.midX - width / 2
         let originY = screenFrame.midY - height / 2
 
@@ -41,7 +48,8 @@ final class AnnotationEditorWindow: NSPanel {
 
         title = "Znap \u{2014} Annotate"
         isReleasedWhenClosed = false
-        minSize = NSSize(width: 400, height: 300)
+        hidesOnDeactivate = false
+        minSize = NSSize(width: 560, height: 400)
         animationBehavior = .documentWindow
 
         let editorView = AnnotationEditorView(image: image)
@@ -69,4 +77,19 @@ final class AnnotationEditorWindow: NSPanel {
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
     }
+
+    /// Brings the current editor back to front, if one exists.
+    static func restore() {
+        guard let window = current, !window.isVisible else {
+            guard let window = current else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    /// Whether an editor window currently exists.
+    static var hasEditor: Bool { current != nil }
 }
