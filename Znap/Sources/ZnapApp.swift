@@ -11,6 +11,8 @@ struct ZnapApp: App {
             Button("Capture Window (\u{2318}\u{21e7}5)") { appDelegate.startWindowCapture() }
             Button("Freeze & Capture (\u{2318}\u{21e7}6)") { appDelegate.startFreezeCapture() }
             Divider()
+            Button("Record Screen (\u{2318}\u{21e7}R)") { appDelegate.toggleRecording() }
+            Divider()
             Text("Znap v0.1.0").foregroundColor(.secondary)
             Divider()
             Button("Quit") { NSApplication.shared.terminate(nil) }

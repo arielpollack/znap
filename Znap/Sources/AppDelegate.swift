@@ -1,5 +1,7 @@
 import AppKit
+import AVFoundation
 import Carbon
+import ScreenCaptureKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -33,6 +35,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             keyCode: UInt32(kVK_ANSI_6),
             modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
             handler: { [weak self] in self?.startFreezeCapture() }
+        )
+
+        // Cmd+Shift+R for recording toggle (kVK_ANSI_R)
+        HotkeyService.shared.register(
+            keyCode: UInt32(kVK_ANSI_R),
+            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
+            handler: { [weak self] in self?.toggleRecording() }
         )
     }
 
@@ -108,6 +117,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 } catch {
                     print("Freeze capture failed: \(error)")
+                }
+            }
+        }
+    }
+
+    func toggleRecording() {
+        Task { @MainActor in
+            let service = RecordingService.shared
+            if service.isRecording {
+                // Stop the current recording and show result
+                if let url = await service.stopRecording() {
+                    // Create a thumbnail from the first frame of the video
+                    let asset = AVURLAsset(url: url)
+                    let generator = AVAssetImageGenerator(asset: asset)
+                    generator.appliesPreferredTrackTransform = true
+
+                    if let cgImage = try? generator.copyCGImage(
+                        at: .zero,
+                        actualTime: nil
+                    ) {
+                        let thumbnail = NSImage(
+                            cgImage: cgImage,
+                            size: NSSize(width: cgImage.width, height: cgImage.height)
+                        )
+                        QuickAccessOverlay.show(image: thumbnail)
+                    }
+                }
+            } else {
+                // Show area selection overlay, then start recording
+                OverlayWindow.beginAreaSelection { rect in
+                    guard let rect = rect else { return }
+                    Task { @MainActor in
+                        do {
+                            let config = RecordingService.RecordingConfig(rect: rect)
+                            try await RecordingService.shared.startRecording(config: config)
+                        } catch {
+                            print("Recording failed to start: \(error)")
+                        }
+                    }
                 }
             }
         }
