@@ -74,6 +74,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        DesktopIconManager.shared.restoreIfNeeded()
+    }
+
     func showAllInOne() {
         let modes: [AllInOneHUD.Mode] = [
             AllInOneHUD.Mode(
