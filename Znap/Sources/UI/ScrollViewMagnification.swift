@@ -3,24 +3,22 @@ import SwiftUI
 
 // MARK: - Centering Clip View
 
-/// An `NSClipView` subclass that centres the document view when its
-/// magnified size is smaller than the visible area.
+/// An `NSClipView` subclass used by the magnification host.
 final class CenteringClipView: NSClipView {
 
     override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
         var constrained = super.constrainBoundsRect(proposedBounds)
-        guard let docView = documentView else { return constrained }
+        guard let documentView = documentView else { return constrained }
 
-        let docFrame = docView.frame
+        let docFrame = documentView.frame
 
-        // If the document is narrower than the visible area, centre horizontally.
-        if docFrame.width < constrained.width {
-            constrained.origin.x = (docFrame.width - constrained.width) / 2
+        // Center horizontally when document is narrower than viewport.
+        if docFrame.width < proposedBounds.width {
+            constrained.origin.x = (docFrame.width - proposedBounds.width) / 2
         }
-
-        // If the document is shorter than the visible area, centre vertically.
-        if docFrame.height < constrained.height {
-            constrained.origin.y = (docFrame.height - constrained.height) / 2
+        // Center vertically when document is shorter than viewport.
+        if docFrame.height < proposedBounds.height {
+            constrained.origin.y = (docFrame.height - proposedBounds.height) / 2
         }
 
         return constrained
@@ -53,13 +51,18 @@ final class MagnificationHostView: NSView {
 
     private weak var magnifiedScrollView: NSScrollView?
     private var magnificationObservation: NSKeyValueObservation?
+    private var clipFrameObservation: NSKeyValueObservation?
     private var didApplyInitial = false
+    /// The document's intrinsic layout size, captured before magnification is applied.
+    private var unmagnifiedContentSize: CGSize = .zero
 
     // MARK: - Lifecycle
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        configureScrollViewIfNeeded()
+        if window != nil {
+            configureScrollViewIfNeeded()
+        }
     }
 
     override func layout() {
@@ -71,8 +74,7 @@ final class MagnificationHostView: NSView {
         guard magnifiedScrollView == nil else { return }
         guard let sv = findParentScrollView() else { return }
 
-        // Replace the clip view with a centering one so content is centred
-        // when zoomed out smaller than the viewport.
+        // Replace the clip view with a custom one.
         if !(sv.contentView is CenteringClipView) {
             let oldClipView = sv.contentView
             let docView = sv.documentView
@@ -88,6 +90,14 @@ final class MagnificationHostView: NSView {
         sv.allowsMagnification = true
         sv.minMagnification = minMagnification
         sv.maxMagnification = maxMagnification
+        sv.automaticallyAdjustsContentInsets = false
+        sv.contentInsets = NSEdgeInsetsZero
+        sv.scrollerInsets = NSEdgeInsetsZero
+
+        // Remove any additional content margins (macOS 14+).
+        if #available(macOS 14.0, *) {
+            sv.contentView.automaticallyAdjustsContentInsets = false
+        }
 
         magnifiedScrollView = sv
 
@@ -96,13 +106,22 @@ final class MagnificationHostView: NSView {
             self?.onMagnificationChanged?(scrollView.magnification)
         }
 
-        // Apply the initial magnification (fit-to-window for large captures).
+        // Capture the unmagnified content size and apply initial magnification.
         if !didApplyInitial {
             didApplyInitial = true
             DispatchQueue.main.async { [weak self] in
                 guard let self, let sv = self.magnifiedScrollView else { return }
+                self.unmagnifiedContentSize = sv.documentView?.frame.size ?? .zero
                 sv.magnification = self.initialMagnification
                 self.onMagnificationChanged?(self.initialMagnification)
+
+                // Observe viewport size changes to zoom out when window shrinks.
+                self.clipFrameObservation = sv.contentView.observe(\.frame, options: [.old, .new]) { [weak self] _, change in
+                    guard let self else { return }
+                    guard let oldFrame = change.oldValue, let newFrame = change.newValue,
+                          oldFrame.size != newFrame.size else { return }
+                    self.zoomOutToFitIfNeeded()
+                }
             }
         }
     }
@@ -158,21 +177,51 @@ final class MagnificationHostView: NSView {
         animateZoom(to: 1.0)
     }
 
+    /// Recaptures the unmagnified content size (call after content changes, e.g. background toggle).
+    func invalidateContentSize() {
+        guard let sv = magnifiedScrollView else { return }
+        let docFrame = sv.documentView?.frame.size ?? .zero
+        guard docFrame.width > 0, docFrame.height > 0 else { return }
+        unmagnifiedContentSize = CGSize(
+            width: docFrame.width / sv.magnification,
+            height: docFrame.height / sv.magnification
+        )
+    }
+
     func zoomToFit() {
         guard let sv = magnifiedScrollView else { return }
-        let contentSize = sv.documentView?.frame.size ?? .zero
-        guard contentSize.width > 0, contentSize.height > 0 else { return }
+        guard unmagnifiedContentSize.width > 0, unmagnifiedContentSize.height > 0 else { return }
 
-        let visibleSize = sv.contentView.bounds.size
-        // Account for current magnification when computing the unmagnified content size.
-        let unmagnifiedWidth = contentSize.width / sv.magnification
-        let unmagnifiedHeight = contentSize.height / sv.magnification
+        let viewportSize = sv.contentView.frame.size
         let fitScale = min(
-            visibleSize.width / unmagnifiedWidth,
-            visibleSize.height / unmagnifiedHeight
+            viewportSize.width / unmagnifiedContentSize.width,
+            viewportSize.height / unmagnifiedContentSize.height
         )
         let clampedScale = fitScale.clamped(to: minMagnification...maxMagnification)
         animateZoom(to: clampedScale)
+    }
+
+    /// Zooms out (only) when the viewport shrinks below the content size.
+    private func zoomOutToFitIfNeeded() {
+        guard let sv = magnifiedScrollView else { return }
+        guard unmagnifiedContentSize.width > 0, unmagnifiedContentSize.height > 0 else { return }
+
+        let viewport = sv.contentView.frame.size
+        let fitScale = min(
+            viewport.width / unmagnifiedContentSize.width,
+            viewport.height / unmagnifiedContentSize.height
+        )
+        let clampedScale = fitScale.clamped(to: minMagnification...maxMagnification)
+
+        // Only zoom out, never in.
+        guard clampedScale < sv.magnification else { return }
+        sv.magnification = clampedScale
+
+        // Re-center after zoom — scroll(to:) triggers constrainBoundsRect.
+        DispatchQueue.main.async {
+            sv.contentView.scroll(to: .zero)
+            sv.reflectScrolledClipView(sv.contentView)
+        }
     }
 
     private func animateZoom(to magnification: CGFloat) {

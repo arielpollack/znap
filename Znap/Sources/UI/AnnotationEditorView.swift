@@ -48,20 +48,27 @@ struct AnnotationEditorView: View {
         )
         _document = State(initialValue: doc)
 
-        // Compute fit-to-window for large captures.
-        // Use the main screen's visible frame minus toolbar/chrome as reference.
+        // Compute fit-to-window zoom so the captured image is always fully visible.
+        // Mirror the window sizing logic from AnnotationEditorWindow.
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
-        let toolbarHeight: CGFloat = 60
-        let padding: CGFloat = 80  // ScrollView padding + window chrome
-        let availableWidth = screenFrame.width - padding
-        let availableHeight = screenFrame.height - toolbarHeight - padding
+        let chromeHeight: CGFloat = 80
+        let toolbarMinWidth: CGFloat = 580
 
-        let imgW = image.size.width
-        let imgH = image.size.height
+        let bgConfig = BackgroundRenderer.Config.load()
+        let bgExtra: CGFloat = bgConfig.enabled ? bgConfig.padding * 2 : 0
 
-        if imgW > availableWidth || imgH > availableHeight {
-            // Image is larger than the viewport — fit to window.
-            let fitScale = min(availableWidth / imgW, availableHeight / imgH)
+        // Full document size (what the scroll view contains at magnification 1).
+        let docW = image.size.width + bgExtra
+        let docH = image.size.height + bgExtra
+
+        // Viewport = window size (capped to screen) minus chrome.
+        let maxW = screenFrame.width - 40
+        let maxH = screenFrame.height - 40
+        let viewportW = min(max(docW, toolbarMinWidth), maxW)
+        let viewportH = min(docH + chromeHeight, maxH) - chromeHeight
+
+        if docW > viewportW || docH > viewportH {
+            let fitScale = min(viewportW / docW, viewportH / docH)
             self.initialMagnification = max(fitScale, 0.1)
         } else {
             self.initialMagnification = 1.0
@@ -95,7 +102,6 @@ struct AnnotationEditorView: View {
 
             ScrollView([.horizontal, .vertical]) {
                 canvasWithBackground
-                    .padding(20)
                     .background(
                         MagnificationHost(
                             initialMagnification: initialMagnification,
@@ -109,8 +115,9 @@ struct AnnotationEditorView: View {
                         .frame(width: 0, height: 0)
                     )
             }
+            .scrollContentBackground(.hidden)
         }
-        .frame(minWidth: 560, minHeight: 400)
+        .frame(minWidth: 580, minHeight: 400)
         .onChange(of: selectedColor) { newColor in
             applyPropertyToSelected { $0.color = newColor }
         }
@@ -130,6 +137,11 @@ struct AnnotationEditorView: View {
         }
         .onChange(of: backgroundConfig) { newConfig in
             newConfig.save()
+            // Content size changed — recapture and zoom to fit after layout updates.
+            DispatchQueue.main.async {
+                zoomHost?.invalidateContentSize()
+                zoomHost?.zoomToFit()
+            }
         }
     }
 
@@ -393,3 +405,5 @@ struct AnnotationEditorView: View {
         return composited
     }
 }
+
+// MARK: - Viewport Size Tracking

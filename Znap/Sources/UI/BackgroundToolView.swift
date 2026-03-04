@@ -45,22 +45,29 @@ struct BackgroundToolView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // Preview
-            previewSection
+            // Enable toggle
+            Toggle("Enable Background", isOn: $config.enabled)
 
-            Divider()
+            if config.enabled {
+                Divider()
 
-            // Background selector
-            backgroundSection
+                // Preview
+                previewSection
 
-            // Sliders
-            slidersSection
+                Divider()
 
-            // Shadow toggle
-            Toggle("Drop Shadow", isOn: $config.addShadow)
+                // Background selector
+                backgroundSection
 
-            // Aspect ratio
-            aspectRatioSection
+                // Sliders
+                slidersSection
+
+                // Shadow toggle
+                Toggle("Drop Shadow", isOn: $config.addShadow)
+
+                // Aspect ratio
+                aspectRatioSection
+            }
         }
         .padding()
         .frame(width: 300)

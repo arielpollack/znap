@@ -94,12 +94,9 @@ struct AnnotationToolbar: View {
 
                 Spacer()
 
-                // Background toggle
+                // Background options
                 Button {
-                    backgroundConfig.enabled.toggle()
-                    if backgroundConfig.enabled {
-                        showBackgroundPopover = true
-                    }
+                    showBackgroundPopover = true
                 } label: {
                     Image(systemName: "rectangle.inset.filled")
                         .frame(width: 26, height: 26)
@@ -151,6 +148,7 @@ struct AnnotationToolbar: View {
                 .buttonStyle(.plain)
                 .help("Save (⌘S)")
             }
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
 
@@ -231,6 +229,7 @@ struct AnnotationToolbar: View {
                 .buttonStyle(.plain)
                 .help("Actual Size (⌘1)")
             }
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
         }

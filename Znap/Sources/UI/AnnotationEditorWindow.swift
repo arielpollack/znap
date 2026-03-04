@@ -18,21 +18,23 @@ final class AnnotationEditorWindow: NSPanel {
     ///
     /// - Parameter image: The captured screenshot to annotate.
     private init(image: NSImage) {
-        let toolbarHeight: CGFloat = 60
-        let padding: CGFloat = 40
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
 
-        // Image point dimensions (already scaled for Retina).
-        let imgW = image.size.width
-        let imgH = image.size.height
+        // Chrome above the scroll view: toolbar rows + dividers.
+        let chromeHeight: CGFloat = 80
+        let toolbarMinWidth: CGFloat = 580
 
-        // Desired window size = image + chrome, capped to screen.
+        // Full document size in the scroll view = image + background.
+        let bgConfig = BackgroundRenderer.Config.load()
+        let bgExtra: CGFloat = bgConfig.enabled ? bgConfig.padding * 2 : 0
+        let docW = image.size.width + bgExtra
+        let docH = image.size.height + bgExtra
+
+        // Window sized so viewport = document, capped to screen.
         let maxW = screenFrame.width - 40
         let maxH = screenFrame.height - 40
-        let contentW = imgW + padding
-        let contentH = imgH + toolbarHeight + padding
-        let width = min(contentW, maxW)
-        let height = min(contentH, maxH)
+        let width = min(max(docW, toolbarMinWidth), maxW)
+        let height = min(docH + chromeHeight, maxH)
 
         let originX = screenFrame.midX - width / 2
         let originY = screenFrame.midY - height / 2
@@ -49,11 +51,16 @@ final class AnnotationEditorWindow: NSPanel {
         title = "Znap \u{2014} Annotate"
         isReleasedWhenClosed = false
         hidesOnDeactivate = false
-        minSize = NSSize(width: 560, height: 400)
         animationBehavior = .documentWindow
 
         let editorView = AnnotationEditorView(image: image)
         contentView = NSHostingView(rootView: editorView)
+
+        // Set min size after content view to prevent NSHostingView from overriding it.
+        let minW = toolbarMinWidth
+        let minH: CGFloat = 400
+        minSize = NSSize(width: minW, height: minH)
+        contentMinSize = NSSize(width: minW, height: minH - (frame.height - contentLayoutRect.height))
     }
 
     // MARK: - Key Window
