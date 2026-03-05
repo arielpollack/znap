@@ -379,19 +379,20 @@ struct AnnotationEditorView: View {
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
 
-        // Flip context to match top-left origin (matches SwiftUI coordinate system).
+        // Draw base image in default CG coordinates (bottom-left origin).
+        ctx.saveGState()
+        ctx.scaleBy(x: scaleX, y: scaleY)
+        ctx.draw(cgImage, in: CGRect(origin: .zero, size: pointSize))
+        ctx.restoreGState()
+
+        // Flip context to match top-left origin for annotations (SwiftUI coordinate system).
         ctx.translateBy(x: 0, y: CGFloat(pixelHeight))
         ctx.scaleBy(x: 1, y: -1)
-
-        // Scale context so point-based annotations map to pixel coordinates.
         ctx.scaleBy(x: scaleX, y: scaleY)
-
-        // Draw base image.
-        ctx.draw(cgImage, in: CGRect(origin: .zero, size: pointSize))
 
         // Draw all annotations (in point coordinates, scaled by context).
         for annotation in document.annotations {
-            AnnotationRenderer.draw(annotation, in: ctx, baseImage: cgImage)
+            AnnotationRenderer.draw(annotation, in: ctx, baseImage: cgImage, canvasSize: pointSize)
         }
 
         guard let resultCGImage = ctx.makeImage() else { return nil }

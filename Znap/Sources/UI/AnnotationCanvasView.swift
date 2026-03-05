@@ -64,88 +64,15 @@ struct AnnotationCanvasView: View {
     // MARK: - Body
 
     var body: some View {
-        Canvas { context, size in
-            // 1. Draw base image.
-            let imageRect = CGRect(origin: .zero, size: size)
-            context.draw(Image(nsImage: baseImage), in: imageRect)
+        ZStack(alignment: .topLeading) {
+            // Base image rendered via Image view — handles large/tall images
+            // efficiently without hitting Metal texture size limits.
+            Image(nsImage: baseImage)
+                .resizable()
+                .interpolation(.high)
 
-            // 2. Draw committed annotations.
-            for annotation in annotations {
-                drawAnnotation(annotation, in: &context, canvasSize: size)
-            }
-
-            // 3. Draw in-progress annotation.
-            if let start = dragStart, let end = dragEnd {
-                let inProgress = makeAnnotation(
-                    start: start,
-                    end: end,
-                    points: freehandPoints.isEmpty ? nil : freehandPoints
-                )
-                drawAnnotation(inProgress, in: &context, canvasSize: size)
-            }
-
-            // 4. Draw hover highlight (skip if it's already selected).
-            if let hovID = hoveredAnnotationID,
-               hovID != selectedAnnotationID,
-               let annotation = annotations.first(where: { $0.id == hovID }) {
-                let bbox = AnnotationHitTesting.boundingBox(for: annotation)
-                let hoverPath = Path(bbox)
-                context.stroke(
-                    hoverPath,
-                    with: .color(.blue.opacity(0.25)),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
-                )
-            }
-
-            // 5. Draw selection indicator.
-            if let selID = selectedAnnotationID,
-               let annotation = annotations.first(where: { $0.id == selID }) {
-                let bbox = AnnotationHitTesting.boundingBox(for: annotation)
-                let selPath = Path(bbox)
-                context.stroke(
-                    selPath,
-                    with: .color(.blue.opacity(0.6)),
-                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 3])
-                )
-
-                // Text/handwriting resize handle.
-                if annotation.type == .text || annotation.type == .handwriting {
-                    let textBounds = AnnotationHitTesting.textBounds(for: annotation)
-                    let br = CGPoint(x: textBounds.maxX, y: textBounds.maxY)
-                    drawHandle(circle: br, in: &context)
-                }
-
-                // Arrow handle indicators.
-                if annotation.type == .arrow {
-                    // Endpoint circles.
-                    drawHandle(circle: annotation.startPoint, in: &context)
-                    drawHandle(circle: annotation.endPoint, in: &context)
-
-                    // Curve handle (square).
-                    let curvePoint = annotation.curveControlPoint ?? CGPoint(
-                        x: (annotation.startPoint.x + annotation.endPoint.x) / 2,
-                        y: (annotation.startPoint.y + annotation.endPoint.y) / 2
-                    )
-                    let isGhost = annotation.curveControlPoint == nil
-                    drawHandle(square: curvePoint, ghost: isGhost, in: &context)
-
-                    // Guide line from midpoint to control point when curve is active.
-                    if annotation.curveControlPoint != nil {
-                        let mid = CGPoint(
-                            x: (annotation.startPoint.x + annotation.endPoint.x) / 2,
-                            y: (annotation.startPoint.y + annotation.endPoint.y) / 2
-                        )
-                        var guideLine = Path()
-                        guideLine.move(to: mid)
-                        guideLine.addLine(to: curvePoint)
-                        context.stroke(
-                            guideLine,
-                            with: .color(.blue.opacity(0.3)),
-                            style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                        )
-                    }
-                }
-            }
+            // Transparent annotation overlay (lightweight Canvas for shapes only).
+            annotationCanvas
         }
         .frame(
             width: baseImage.size.width,
@@ -178,10 +105,18 @@ struct AnnotationCanvasView: View {
                     }
                 },
                 onDragEnded: { start, end in
+                    // Simplify freehand paths for cleaner curves and straighter lines.
+                    let smoothedPoints: [CGPoint]?
+                    if !freehandPoints.isEmpty {
+                        smoothedPoints = PathSmoothing.simplify(freehandPoints)
+                    } else {
+                        smoothedPoints = nil
+                    }
+
                     let annotation = makeAnnotation(
                         start: start,
                         end: end,
-                        points: freehandPoints.isEmpty ? nil : freehandPoints
+                        points: smoothedPoints
                     )
                     onAnnotationCreated(annotation)
 
@@ -239,6 +174,82 @@ struct AnnotationCanvasView: View {
                 }
             )
         )
+    }
+
+    // MARK: - Annotation Canvas
+
+    /// Extracted from `body` to keep the type-checker happy.
+    private var annotationCanvas: some View {
+        Canvas { context, size in
+            for annotation in annotations {
+                drawAnnotation(annotation, in: &context, canvasSize: size)
+            }
+
+            if let start = dragStart, let end = dragEnd {
+                let inProgress = makeAnnotation(
+                    start: start,
+                    end: end,
+                    points: freehandPoints.isEmpty ? nil : freehandPoints
+                )
+                drawAnnotation(inProgress, in: &context, canvasSize: size)
+            }
+
+            if let hovID = hoveredAnnotationID,
+               hovID != selectedAnnotationID,
+               let annotation = annotations.first(where: { $0.id == hovID }) {
+                let bbox = AnnotationHitTesting.boundingBox(for: annotation)
+                let hoverPath = Path(bbox)
+                context.stroke(
+                    hoverPath,
+                    with: .color(.blue.opacity(0.25)),
+                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 4])
+                )
+            }
+
+            if let selID = selectedAnnotationID,
+               let annotation = annotations.first(where: { $0.id == selID }) {
+                let bbox = AnnotationHitTesting.boundingBox(for: annotation)
+                let selPath = Path(bbox)
+                context.stroke(
+                    selPath,
+                    with: .color(.blue.opacity(0.6)),
+                    style: StrokeStyle(lineWidth: 1.5, dash: [6, 3])
+                )
+
+                if annotation.type == .text || annotation.type == .handwriting {
+                    let textBounds = AnnotationHitTesting.textBounds(for: annotation)
+                    let br = CGPoint(x: textBounds.maxX, y: textBounds.maxY)
+                    drawHandle(circle: br, in: &context)
+                }
+
+                if annotation.type == .arrow {
+                    drawHandle(circle: annotation.startPoint, in: &context)
+                    drawHandle(circle: annotation.endPoint, in: &context)
+
+                    let curvePoint = annotation.curveControlPoint ?? CGPoint(
+                        x: (annotation.startPoint.x + annotation.endPoint.x) / 2,
+                        y: (annotation.startPoint.y + annotation.endPoint.y) / 2
+                    )
+                    let isGhost = annotation.curveControlPoint == nil
+                    drawHandle(square: curvePoint, ghost: isGhost, in: &context)
+
+                    if annotation.curveControlPoint != nil {
+                        let mid = CGPoint(
+                            x: (annotation.startPoint.x + annotation.endPoint.x) / 2,
+                            y: (annotation.startPoint.y + annotation.endPoint.y) / 2
+                        )
+                        var guideLine = Path()
+                        guideLine.move(to: mid)
+                        guideLine.addLine(to: curvePoint)
+                        context.stroke(
+                            guideLine,
+                            with: .color(.blue.opacity(0.3)),
+                            style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                        )
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Handle Drawing
@@ -375,18 +386,70 @@ struct AnnotationCanvasView: View {
                 drawCounter(annotation, in: &ctx, color: swiftUIColor)
             }
 
-        case .pixelate, .blur, .spotlight:
-            // Preview: draw a dashed rectangle outline.
-            let rect = AnnotationRenderer.rectFromPoints(
-                annotation.startPoint, annotation.endPoint
-            )
-            let dashedPath = Path(rect)
-            context.stroke(
-                dashedPath,
-                with: .color(swiftUIColor),
-                style: StrokeStyle(lineWidth: 2, dash: [6, 4])
-            )
+        case .pixelate:
+            drawPixelatePreview(annotation, in: &context, canvasSize: canvasSize)
+
+        case .blur:
+            drawBlurPreview(annotation, in: &context, canvasSize: canvasSize)
+
+        case .spotlight:
+            drawSpotlightPreview(annotation, in: &context, canvasSize: canvasSize)
         }
+    }
+
+    // MARK: - Pixelate / Blur / Spotlight Preview
+
+    private func drawPixelatePreview(
+        _ annotation: AnnotationDocument.Annotation,
+        in context: inout GraphicsContext,
+        canvasSize: CGSize
+    ) {
+        let rect = AnnotationRenderer.rectFromPoints(annotation.startPoint, annotation.endPoint)
+        guard rect.width > 0, rect.height > 0,
+              let cgImage = baseImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+
+        let scaleX = CGFloat(cgImage.width) / canvasSize.width
+        let scaleY = CGFloat(cgImage.height) / canvasSize.height
+        let pixelRect = CGRect(
+            x: rect.origin.x * scaleX,
+            y: (canvasSize.height - rect.origin.y - rect.height) * scaleY,
+            width: rect.width * scaleX,
+            height: rect.height * scaleY
+        )
+
+        if let filtered = ImageFilters.pixelate(image: cgImage, region: pixelRect) {
+            let nsImage = NSImage(cgImage: filtered, size: canvasSize)
+            context.draw(Image(nsImage: nsImage), in: CGRect(origin: .zero, size: canvasSize))
+        }
+    }
+
+    private func drawBlurPreview(
+        _ annotation: AnnotationDocument.Annotation,
+        in context: inout GraphicsContext,
+        canvasSize: CGSize
+    ) {
+        let rect = AnnotationRenderer.rectFromPoints(annotation.startPoint, annotation.endPoint)
+        guard rect.width > 0, rect.height > 0 else { return }
+
+        context.drawLayer { ctx in
+            ctx.clip(to: Path(rect))
+            ctx.addFilter(.blur(radius: 10))
+            ctx.draw(Image(nsImage: baseImage), in: CGRect(origin: .zero, size: canvasSize))
+        }
+    }
+
+    private func drawSpotlightPreview(
+        _ annotation: AnnotationDocument.Annotation,
+        in context: inout GraphicsContext,
+        canvasSize: CGSize
+    ) {
+        let rect = AnnotationRenderer.rectFromPoints(annotation.startPoint, annotation.endPoint)
+        guard rect.width > 0, rect.height > 0 else { return }
+
+        var overlayPath = Path()
+        overlayPath.addRect(CGRect(origin: .zero, size: canvasSize))
+        overlayPath.addRect(rect)
+        context.fill(overlayPath, with: .color(.black.opacity(0.6)), style: FillStyle(eoFill: true))
     }
 
     // MARK: - Arrow Drawing
@@ -461,8 +524,10 @@ struct AnnotationCanvasView: View {
 
         var path = Path()
         path.move(to: pts[0])
-        for i in 1..<pts.count {
-            path.addLine(to: pts[i])
+
+        let segments = PathSmoothing.catmullRomSegments(pts)
+        for seg in segments {
+            path.addCurve(to: seg.p1, control1: seg.cp1, control2: seg.cp2)
         }
 
         var ctx = context

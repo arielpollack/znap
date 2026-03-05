@@ -258,19 +258,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func startScrollCapture() {
-        OverlayWindow.beginAreaSelection { rect in
-            guard let rect = rect else { return }
-            Task {
-                do {
-                    let cgImage = try await ScrollCaptureService.shared.captureScrolling(in: rect)
+        OverlayWindow.beginAreaSelection { [weak self] rect in
+            guard let self, let rect else { return }
+
+            // Show the blinking overlay.
+            ScrollCaptureOverlay.show(around: rect, onStop: { [weak self] in
+                guard let self else { return }
+                // ENTER pressed — stop capturing and show the stitched result.
+                if let cgImage = ScrollCaptureService.shared.stopCapturing() {
                     let nsImage = Self.nsImage(from: cgImage)
-                    await MainActor.run {
-                        self.showCaptureResult(nsImage, type: "scroll")
-                    }
-                } catch {
-                    print("Scroll capture failed: \(error)")
+                    self.showCaptureResult(nsImage, type: "scroll")
                 }
-            }
+            }, onCancel: {
+                // ESC pressed — stop and discard.
+                ScrollCaptureService.shared.stopCapturing()
+            })
+
+            // Start periodic frame capture.
+            ScrollCaptureService.shared.startCapturing(in: rect)
         }
     }
 

@@ -25,7 +25,8 @@ enum AnnotationRenderer {
     static func draw(
         _ annotation: AnnotationDocument.Annotation,
         in ctx: CGContext,
-        baseImage: CGImage? = nil
+        baseImage: CGImage? = nil,
+        canvasSize: CGSize? = nil
     ) {
         let color = annotation.color.cgColor
         let lineWidth = annotation.strokeWidth
@@ -87,13 +88,13 @@ enum AnnotationRenderer {
             drawCounter(annotation, in: ctx)
 
         case .pixelate:
-            drawPixelate(annotation, in: ctx, baseImage: baseImage)
+            drawPixelate(annotation, in: ctx, baseImage: baseImage, canvasSize: canvasSize)
 
         case .blur:
-            drawBlur(annotation, in: ctx, baseImage: baseImage)
+            drawBlur(annotation, in: ctx, baseImage: baseImage, canvasSize: canvasSize)
 
         case .spotlight:
-            drawSpotlight(annotation, in: ctx, baseImage: baseImage)
+            drawSpotlight(annotation, in: ctx, baseImage: baseImage, canvasSize: canvasSize)
         }
 
         ctx.restoreGState()
@@ -167,8 +168,9 @@ enum AnnotationRenderer {
         ctx.setLineJoin(.round)
 
         ctx.move(to: pts[0])
-        for i in 1..<pts.count {
-            ctx.addLine(to: pts[i])
+        let segments = PathSmoothing.catmullRomSegments(pts)
+        for seg in segments {
+            ctx.addCurve(to: seg.p1, control1: seg.cp1, control2: seg.cp2)
         }
         ctx.strokePath()
     }
@@ -276,54 +278,72 @@ enum AnnotationRenderer {
     private static func drawPixelate(
         _ annotation: AnnotationDocument.Annotation,
         in ctx: CGContext,
-        baseImage: CGImage?
+        baseImage: CGImage?,
+        canvasSize: CGSize?
     ) {
         let rect = rectFromPoints(annotation.startPoint, annotation.endPoint)
-        guard let base = baseImage else {
+        guard let base = baseImage, let cs = canvasSize else {
             drawDashedRect(rect, in: ctx, label: "Pixelate")
             return
         }
 
-        if let filtered = ImageFilters.pixelate(image: base, region: rect) {
-            // Draw the filtered image over the entire canvas; it already contains the
-            // composited result (filter region over original).
-            let fullRect = CGRect(x: 0, y: 0, width: base.width, height: base.height)
-            ctx.draw(filtered, in: fullRect)
+        let pixelRect = pointRectToPixelRect(rect, imageSize: base, canvasSize: cs)
+        if let filtered = ImageFilters.pixelate(image: base, region: pixelRect) {
+            ctx.draw(filtered, in: CGRect(origin: .zero, size: cs))
         }
     }
 
     private static func drawBlur(
         _ annotation: AnnotationDocument.Annotation,
         in ctx: CGContext,
-        baseImage: CGImage?
+        baseImage: CGImage?,
+        canvasSize: CGSize?
     ) {
         let rect = rectFromPoints(annotation.startPoint, annotation.endPoint)
-        guard let base = baseImage else {
+        guard let base = baseImage, let cs = canvasSize else {
             drawDashedRect(rect, in: ctx, label: "Blur")
             return
         }
 
-        if let filtered = ImageFilters.blur(image: base, region: rect) {
-            let fullRect = CGRect(x: 0, y: 0, width: base.width, height: base.height)
-            ctx.draw(filtered, in: fullRect)
+        let pixelRect = pointRectToPixelRect(rect, imageSize: base, canvasSize: cs)
+        if let filtered = ImageFilters.blur(image: base, region: pixelRect) {
+            ctx.draw(filtered, in: CGRect(origin: .zero, size: cs))
         }
     }
 
     private static func drawSpotlight(
         _ annotation: AnnotationDocument.Annotation,
         in ctx: CGContext,
-        baseImage: CGImage?
+        baseImage: CGImage?,
+        canvasSize: CGSize?
     ) {
         let rect = rectFromPoints(annotation.startPoint, annotation.endPoint)
-        guard let base = baseImage else {
+        guard let base = baseImage, let cs = canvasSize else {
             drawDashedRect(rect, in: ctx, label: "Spotlight")
             return
         }
 
-        if let filtered = ImageFilters.spotlight(image: base, region: rect) {
-            let fullRect = CGRect(x: 0, y: 0, width: base.width, height: base.height)
-            ctx.draw(filtered, in: fullRect)
+        let pixelRect = pointRectToPixelRect(rect, imageSize: base, canvasSize: cs)
+        if let filtered = ImageFilters.spotlight(image: base, region: pixelRect) {
+            ctx.draw(filtered, in: CGRect(origin: .zero, size: cs))
         }
+    }
+
+    /// Converts a rect from point coordinates (top-left origin) to pixel
+    /// coordinates (bottom-left origin) for CIFilter / CGImage operations.
+    private static func pointRectToPixelRect(
+        _ rect: CGRect,
+        imageSize: CGImage,
+        canvasSize: CGSize
+    ) -> CGRect {
+        let scaleX = CGFloat(imageSize.width) / canvasSize.width
+        let scaleY = CGFloat(imageSize.height) / canvasSize.height
+        return CGRect(
+            x: rect.origin.x * scaleX,
+            y: (canvasSize.height - rect.origin.y - rect.height) * scaleY,
+            width: rect.width * scaleX,
+            height: rect.height * scaleY
+        )
     }
 
     // MARK: - Dashed Rect Placeholder

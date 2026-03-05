@@ -1,122 +1,99 @@
 import CoreGraphics
 import AppKit
 
-/// Service that performs scrolling capture by programmatically scrolling a region
-/// and stitching the captured frames together.
+/// Service that passively captures frames while the user manually scrolls,
+/// then stitches them into a single tall image.
 ///
-/// The service captures an initial frame, sends scroll events to advance the content,
-/// captures subsequent frames, and uses ``ImageStitcher`` to combine them into a
-/// single tall (or wide) image.
+/// Uses ``CaptureService`` (ScreenCaptureKit) for each frame capture so it
+/// works on modern macOS where `CGWindowListCreateImage` is unavailable.
 ///
 /// ## Usage
 ///
 /// ```swift
-/// let image = try await ScrollCaptureService.shared.captureScrolling(in: rect)
+/// ScrollCaptureService.shared.startCapturing(in: rect)
+/// // ... user scrolls ...
+/// if let image = ScrollCaptureService.shared.stopCapturing() {
+///     // show stitched image
+/// }
 /// ```
 final class ScrollCaptureService {
     static let shared = ScrollCaptureService()
 
     private init() {}
 
-    /// The direction of scrolling.
-    enum ScrollDirection {
-        case vertical
-        case horizontal
-    }
+    private var frames: [CGImage] = []
+    private var isCapturing = false
+    private var captureTimer: Timer?
+    /// Guards against overlapping async captures.
+    private var isBusy = false
 
-    enum ScrollCaptureError: Error {
-        case captureFailed
-        case noFramesCaptured
-        case stitchFailed
-    }
-
-    /// Maximum number of frames to capture in a single scroll session.
-    private let maxFrames = 50
-
-    /// Delay in seconds between scroll and next capture, allowing content to settle.
-    private let scrollSettleDelay: TimeInterval = 0.2
-
-    /// Captures a scrolling region by auto-scrolling and stitching frames.
+    /// Begins periodic frame capture of the given screen region.
     ///
-    /// - Parameters:
-    ///   - rect: The screen region to capture, in point coordinates.
-    ///   - direction: The scroll direction. Defaults to `.vertical`.
-    /// - Returns: A single stitched `CGImage` of the scrolled content.
-    func captureScrolling(
-        in rect: CGRect,
-        direction: ScrollDirection = .vertical
-    ) async throws -> CGImage {
-        var frames: [CGImage] = []
+    /// - Parameter rect: The screen region in AppKit coordinates (bottom-left origin).
+    func startCapturing(in rect: CGRect) {
+        frames = []
+        isCapturing = true
+        isBusy = false
 
-        // 1. Capture initial frame
-        guard let firstFrame = captureRegion(rect) else {
-            throw ScrollCaptureError.captureFailed
-        }
-        frames.append(firstFrame)
-
-        // 2. Scroll and capture loop
-        for _ in 1..<maxFrames {
-            // Send scroll event
-            sendScrollEvent(direction: direction)
-
-            // Wait for scroll to settle
-            try await Task.sleep(nanoseconds: UInt64(scrollSettleDelay * 1_000_000_000))
-
-            // Capture next frame
-            guard let frame = captureRegion(rect) else { continue }
-
-            // Compare with previous frame — if identical, stop
-            if isDuplicate(frame, previous: frames.last!) {
-                break
-            }
-
-            frames.append(frame)
+        // Capture a frame every 150ms using CaptureService (ScreenCaptureKit).
+        captureTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { [weak self] _ in
+            self?.timerFired(rect: rect)
         }
 
-        guard !frames.isEmpty else {
-            throw ScrollCaptureError.noFramesCaptured
-        }
+        // Also capture the first frame immediately.
+        timerFired(rect: rect)
+    }
 
-        // If only one frame was captured, return it directly
+    /// Stops capturing and returns the stitched image, or `nil` if stitching
+    /// failed or no frames were captured.
+    @discardableResult
+    func stopCapturing() -> CGImage? {
+        isCapturing = false
+        captureTimer?.invalidate()
+        captureTimer = nil
+
+        guard !frames.isEmpty else { return nil }
+
         if frames.count == 1 {
-            return frames[0]
+            let result = frames[0]
+            frames = []
+            return result
         }
 
-        // Stitch all frames
-        guard let stitched = ImageStitcher.stitch(images: frames) else {
-            throw ScrollCaptureError.stitchFailed
-        }
-
-        return stitched
+        let result = ImageStitcher.stitch(images: frames)
+        frames = []
+        return result
     }
 
     // MARK: - Private Helpers
 
-    /// Captures a region of the screen using CGWindowListCreateImage.
-    private func captureRegion(_ rect: CGRect) -> CGImage? {
-        CGWindowListCreateImage(
-            rect,
-            .optionOnScreenOnly,
-            kCGNullWindowID,
-            [.bestResolution]
-        )
+    /// Called by the timer; kicks off an async capture via CaptureService.
+    private func timerFired(rect: CGRect) {
+        guard isCapturing, !isBusy else { return }
+        isBusy = true
+
+        Task {
+            defer {
+                DispatchQueue.main.async { self.isBusy = false }
+            }
+            guard let frame = try? await CaptureService.shared.captureArea(rect) else {
+                return
+            }
+            DispatchQueue.main.async { [weak self] in
+                self?.appendIfUnique(frame)
+            }
+        }
     }
 
-    /// Sends a scroll wheel event in the specified direction.
-    private func sendScrollEvent(direction: ScrollDirection) {
-        let wheel1: Int32 = direction == .vertical ? -5 : 0
-        let wheel2: Int32 = direction == .horizontal ? -5 : 0
-
-        guard let event = CGEvent(
-            scrollWheelEvent2Source: nil,
-            units: .line,
-            wheelCount: 2,
-            wheel1: wheel1,
-            wheel2: wheel2,
-            wheel3: 0
-        ) else { return }
-
-        event.post(tap: .cgSessionEventTap)
+    /// Appends the frame only if it differs from the last captured frame.
+    private func appendIfUnique(_ frame: CGImage) {
+        if let last = frames.last {
+            if !isDuplicate(frame, previous: last) {
+                frames.append(frame)
+            }
+        } else {
+            frames.append(frame)
+        }
     }
 
     /// Checks whether two frames are essentially identical (duplicate).
@@ -162,6 +139,8 @@ final class ScrollCaptureService {
         }
 
         guard sampleCount > 0 else { return true }
-        return matchCount * 100 / sampleCount >= 98
+        // 99.5% threshold — filters out frames with trivial scroll amounts
+        // (1-5px) that don't add meaningful new content.
+        return matchCount * 1000 / sampleCount >= 995
     }
 }
