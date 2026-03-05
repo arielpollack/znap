@@ -28,7 +28,7 @@ struct AnnotationEditorView: View {
     @State private var zoomLevel: CGFloat = 1.0
     /// Class-based holder so toolbar closures always see the current host reference.
     private let zoomHostHolder = ZoomHostHolder()
-    @State private var backgroundConfig: BackgroundRenderer.Config = BackgroundRenderer.Config.load()
+    @State private var backgroundConfig: BackgroundRenderer.Config
 
     /// The original NSImage, kept for rendering the base image in the canvas.
     private let baseImage: NSImage
@@ -65,7 +65,8 @@ struct AnnotationEditorView: View {
         let chromeHeight: CGFloat = 80
         let toolbarMinWidth: CGFloat = 580
 
-        let bgConfig = BackgroundRenderer.Config.load()
+        var bgConfig = BackgroundRenderer.Config.load()
+        bgConfig.windowTitle = windowTitle
         let bgExtra: CGFloat = bgConfig.enabled ? bgConfig.padding * 2 : 0
 
         // Full document size (what the scroll view contains at magnification 1).
@@ -84,6 +85,8 @@ struct AnnotationEditorView: View {
         } else {
             self.initialMagnification = 1.0
         }
+
+        _backgroundConfig = State(initialValue: bgConfig)
     }
 
     // MARK: - Body
@@ -228,18 +231,43 @@ struct AnnotationEditorView: View {
         )
 
         if backgroundConfig.enabled {
-            canvas
-                .clipShape(RoundedRectangle(cornerRadius: backgroundConfig.cornerRadius))
-                .shadow(
-                    color: backgroundConfig.addShadow ? .black.opacity(0.4) : .clear,
-                    radius: backgroundConfig.addShadow ? 20 : 0,
-                    y: backgroundConfig.addShadow ? 4 : 0
-                )
-                .padding(backgroundConfig.padding)
-                .background(backgroundGradient)
+            VStack(spacing: 0) {
+                if backgroundConfig.showWindowHeader {
+                    windowHeaderView
+                }
+                canvas
+            }
+            .clipShape(RoundedRectangle(cornerRadius: backgroundConfig.cornerRadius))
+            .shadow(
+                color: backgroundConfig.addShadow ? .black.opacity(0.4) : .clear,
+                radius: backgroundConfig.addShadow ? 20 : 0,
+                y: backgroundConfig.addShadow ? 4 : 0
+            )
+            .padding(backgroundConfig.padding)
+            .background(backgroundGradient)
         } else {
             canvas
         }
+    }
+
+    /// Dummy macOS window header with traffic lights and centered title.
+    private var windowHeaderView: some View {
+        ZStack {
+            Color(nsColor: NSColor(red: 0.91, green: 0.91, blue: 0.91, alpha: 1))
+
+            HStack(spacing: 8) {
+                Circle().fill(Color(red: 1.0, green: 0.373, blue: 0.341)).frame(width: 12, height: 12)
+                Circle().fill(Color(red: 0.996, green: 0.737, blue: 0.180)).frame(width: 12, height: 12)
+                Circle().fill(Color(red: 0.157, green: 0.784, blue: 0.251)).frame(width: 12, height: 12)
+                Spacer()
+            }
+            .padding(.leading, 8)
+
+            Text(backgroundConfig.windowTitle)
+                .font(.system(size: 13))
+                .foregroundColor(.secondary)
+        }
+        .frame(height: 28)
     }
 
     /// The background gradient or solid color for the live preview.
