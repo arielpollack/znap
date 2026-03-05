@@ -177,9 +177,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showCaptureResult(_ nsImage: NSImage, type: String = "area", windowTitle: String = "") {
         HistoryService.shared.addCapture(type: type, image: nsImage)
         if UserDefaults.standard.bool(forKey: "autoOpenEditor") {
-            AnnotationEditorWindow.open(with: nsImage)
+            AnnotationEditorWindow.open(with: nsImage, windowTitle: windowTitle)
         } else {
-            QuickAccessOverlay.show(image: nsImage)
+            QuickAccessOverlay.show(image: nsImage, windowTitle: windowTitle)
         }
     }
 

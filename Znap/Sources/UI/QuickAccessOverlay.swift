@@ -37,6 +37,9 @@ final class QuickAccessOverlay: NSPanel {
     /// The captured image displayed in this overlay.
     let image: NSImage
 
+    /// The title of the window that was captured (e.g., app name). Empty if unknown.
+    private var windowTitle: String = ""
+
     /// Timer that auto-dismisses the overlay after a timeout.
     private var dismissTimer: Timer?
 
@@ -95,12 +98,13 @@ final class QuickAccessOverlay: NSPanel {
     /// and starts the auto-dismiss timer.
     ///
     /// - Parameter image: The captured screenshot to display.
-    static func show(image: NSImage) {
+    static func show(image: NSImage, windowTitle: String = "") {
         // Close any existing overlay first.
         current?.dismissTimer?.invalidate()
         current?.orderOut(nil)
 
         let overlay = QuickAccessOverlay(image: image)
+        overlay.windowTitle = windowTitle
         current = overlay
 
         NSApp.activate(ignoringOtherApps: true)
@@ -171,7 +175,7 @@ final class QuickAccessOverlay: NSPanel {
         case .dismiss:
             animateOut()
         case .openAnnotate:
-            AnnotationEditorWindow.open(with: image)
+            AnnotationEditorWindow.open(with: image, windowTitle: windowTitle)
             animateOut()
         case .saveAs:
             // TODO: wire up NSSavePanel

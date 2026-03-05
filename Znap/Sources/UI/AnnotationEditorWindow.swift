@@ -17,7 +17,7 @@ final class AnnotationEditorWindow: NSPanel {
     /// Creates an annotation editor window sized to fit the given image.
     ///
     /// - Parameter image: The captured screenshot to annotate.
-    private init(image: NSImage) {
+    private init(image: NSImage, windowTitle: String = "") {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
 
         // Chrome above the scroll view: toolbar rows + dividers.
@@ -53,7 +53,7 @@ final class AnnotationEditorWindow: NSPanel {
         hidesOnDeactivate = false
         animationBehavior = .documentWindow
 
-        let editorView = AnnotationEditorView(image: image)
+        let editorView = AnnotationEditorView(image: image, windowTitle: windowTitle)
         contentView = NSHostingView(rootView: editorView)
 
         // Set min size after content view to prevent NSHostingView from overriding it.
@@ -152,11 +152,11 @@ final class AnnotationEditorWindow: NSPanel {
     /// Closes any previously open annotation editor first.
     ///
     /// - Parameter image: The captured screenshot to annotate.
-    static func open(with image: NSImage) {
+    static func open(with image: NSImage, windowTitle: String = "") {
         // Close the previous editor if one is open.
         current?.close()
 
-        let window = AnnotationEditorWindow(image: image)
+        let window = AnnotationEditorWindow(image: image, windowTitle: windowTitle)
         current = window
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)

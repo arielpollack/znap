@@ -33,13 +33,17 @@ struct AnnotationEditorView: View {
     /// The original NSImage, kept for rendering the base image in the canvas.
     private let baseImage: NSImage
 
+    /// The title of the window that was captured (e.g., app name). Empty if unknown.
+    private let capturedWindowTitle: String
+
     /// The initial magnification: fit-to-window for large captures, 1.0 otherwise.
     private let initialMagnification: CGFloat
 
     // MARK: - Initialization
 
-    init(image: NSImage) {
+    init(image: NSImage, windowTitle: String = "") {
         self.baseImage = image
+        self.capturedWindowTitle = windowTitle
 
         let tiffData = image.tiffRepresentation ?? Data()
         let pngData: Data
