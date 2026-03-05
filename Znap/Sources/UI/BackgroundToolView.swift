@@ -65,6 +65,14 @@ struct BackgroundToolView: View {
                 // Shadow toggle
                 Toggle("Drop Shadow", isOn: $config.addShadow)
 
+                // Window header
+                Toggle("Window Header", isOn: $config.showWindowHeader)
+
+                if config.showWindowHeader {
+                    TextField("Window Title", text: $config.windowTitle)
+                        .textFieldStyle(.roundedBorder)
+                }
+
                 // Aspect ratio
                 aspectRatioSection
             }
