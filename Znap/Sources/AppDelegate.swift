@@ -149,9 +149,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    /// Returns the owner name of the frontmost on-screen window that doesn't
+    /// belong to Znap. Falls back to an empty string.
+    private static func frontmostWindowName() -> String {
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        guard let windowList = CGWindowListCopyWindowInfo(
+            [.optionOnScreenOnly, .excludeDesktopElements],
+            kCGNullWindowID
+        ) as? [[CFString: Any]] else { return "" }
+
+        for entry in windowList {
+            guard let pid = entry[kCGWindowOwnerPID] as? Int32,
+                  pid != ownPID,
+                  let name = entry[kCGWindowOwnerName] as? String,
+                  let boundsDict = entry[kCGWindowBounds] as? [String: CGFloat],
+                  let width = boundsDict["Width"],
+                  let height = boundsDict["Height"],
+                  width > 10, height > 10
+            else { continue }
+            return name
+        }
+        return ""
+    }
+
     /// Shows the captured image — either in the annotation editor (if autoOpenEditor
     /// is enabled) or in the Quick Access Overlay thumbnail.
-    private func showCaptureResult(_ nsImage: NSImage, type: String = "area") {
+    private func showCaptureResult(_ nsImage: NSImage, type: String = "area", windowTitle: String = "") {
         HistoryService.shared.addCapture(type: type, image: nsImage)
         if UserDefaults.standard.bool(forKey: "autoOpenEditor") {
             AnnotationEditorWindow.open(with: nsImage)
@@ -161,6 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func startAreaCapture() {
+        let windowTitle = Self.frontmostWindowName()
         OverlayWindow.beginAreaSelection { rect in
             guard let rect = rect else { return }
             Task {
@@ -168,7 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let cgImage = try await CaptureService.shared.captureArea(rect)
                     let nsImage = Self.nsImage(from: cgImage)
                     await MainActor.run {
-                        self.showCaptureResult(nsImage)
+                        self.showCaptureResult(nsImage, windowTitle: windowTitle)
                     }
                 } catch {
                     print("Capture failed: \(error)")
@@ -178,12 +202,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func startFullscreenCapture() {
+        let windowTitle = Self.frontmostWindowName()
         Task {
             do {
                 let cgImage = try await CaptureService.shared.captureFullscreen()
                 let nsImage = Self.nsImage(from: cgImage)
                 await MainActor.run {
-                    self.showCaptureResult(nsImage, type: "fullscreen")
+                    self.showCaptureResult(nsImage, type: "fullscreen", windowTitle: windowTitle)
                 }
             } catch {
                 print("Capture failed: \(error)")
@@ -192,6 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func startWindowCapture() {
+        let windowTitle = Self.frontmostWindowName()
         WindowHighlightOverlay.beginWindowSelection { windowID in
             guard let windowID = windowID else { return }
             Task {
@@ -199,7 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let cgImage = try await CaptureService.shared.captureWindow(windowID)
                     let nsImage = Self.nsImage(from: cgImage)
                     await MainActor.run {
-                        self.showCaptureResult(nsImage, type: "window")
+                        self.showCaptureResult(nsImage, type: "window", windowTitle: windowTitle)
                     }
                 } catch {
                     print("Window capture failed: \(error)")
@@ -209,6 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func startFreezeCapture() {
+        let windowTitle = Self.frontmostWindowName()
         FreezeScreenOverlay.beginFrozenCapture { rect in
             guard let rect = rect else { return }
             Task {
@@ -216,7 +243,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let cgImage = try await CaptureService.shared.captureArea(rect)
                     let nsImage = Self.nsImage(from: cgImage)
                     await MainActor.run {
-                        self.showCaptureResult(nsImage, type: "freeze")
+                        self.showCaptureResult(nsImage, type: "freeze", windowTitle: windowTitle)
                     }
                 } catch {
                     print("Freeze capture failed: \(error)")
@@ -269,6 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func startScrollCapture() {
+        let windowTitle = Self.frontmostWindowName()
         OverlayWindow.beginAreaSelection { [weak self] rect in
             guard let self, let rect else { return }
 
@@ -278,7 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // ENTER pressed — stop capturing and show the stitched result.
                 if let cgImage = ScrollCaptureService.shared.stopCapturing() {
                     let nsImage = Self.nsImage(from: cgImage)
-                    self.showCaptureResult(nsImage, type: "scroll")
+                    self.showCaptureResult(nsImage, type: "scroll", windowTitle: windowTitle)
                 }
             }, onCancel: {
                 // ESC pressed — stop and discard.
@@ -291,6 +319,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func toggleRecording() {
+        let windowTitle = Self.frontmostWindowName()
         Task { @MainActor in
             let service = RecordingService.shared
             if service.isRecording {
@@ -306,7 +335,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         actualTime: nil
                     ) {
                         let thumbnail = Self.nsImage(from: cgImage)
-                        self.showCaptureResult(thumbnail, type: "recording")
+                        self.showCaptureResult(thumbnail, type: "recording", windowTitle: windowTitle)
                     }
                 }
             } else {
