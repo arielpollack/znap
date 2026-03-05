@@ -71,8 +71,18 @@ struct AnnotationEditorView: View {
         let headerExtra: CGFloat = bgConfig.enabled && bgConfig.showWindowHeader ? BackgroundRenderer.headerHeight : 0
 
         // Full document size (what the scroll view contains at magnification 1).
-        let docW = image.size.width + bgExtra
-        let docH = image.size.height + bgExtra + headerExtra
+        var docW = image.size.width + bgExtra
+        var docH = image.size.height + bgExtra + headerExtra
+
+        // Apply aspect ratio constraint to document size.
+        if bgConfig.enabled, let ratio = bgConfig.aspectRatio?.value {
+            let currentRatio = docW / docH
+            if currentRatio > ratio {
+                docH = docW / ratio
+            } else if currentRatio < ratio {
+                docW = docH * ratio
+            }
+        }
 
         // Viewport = window size (capped to screen) minus chrome.
         let maxW = screenFrame.width - 40
@@ -105,7 +115,6 @@ struct AnnotationEditorView: View {
                 onSave: save,
                 canUndo: !undoStack.isEmpty,
                 canRedo: !redoStack.isEmpty,
-                baseImage: baseImage,
                 zoomLevel: zoomLevel,
                 onZoomIn: { zoomHostHolder.host?.zoomIn() },
                 onZoomOut: { zoomHostHolder.host?.zoomOut() },
@@ -115,22 +124,30 @@ struct AnnotationEditorView: View {
 
             Divider()
 
-            ScrollView([.horizontal, .vertical]) {
-                canvasWithBackground
-                    .background(
-                        MagnificationHost(
-                            initialMagnification: initialMagnification,
-                            onMagnificationChanged: { mag in
-                                zoomLevel = mag
-                            },
-                            onHostReady: { host in
-                                zoomHostHolder.host = host
-                            }
+            GeometryReader { viewportProxy in
+                ScrollView([.horizontal, .vertical]) {
+                    canvasWithBackground
+                        .frame(
+                            minWidth: viewportProxy.size.width,
+                            minHeight: viewportProxy.size.height,
+                            alignment: .center
                         )
-                        .frame(width: 0, height: 0)
-                    )
+                        .background(
+                            MagnificationHost(
+                                initialMagnification: initialMagnification,
+                                contentSize: computeDocumentSize(for: backgroundConfig),
+                                onMagnificationChanged: { mag in
+                                    zoomLevel = mag
+                                },
+                                onHostReady: { host in
+                                    zoomHostHolder.host = host
+                                }
+                            )
+                            .frame(width: 0, height: 0)
+                        )
+                }
+                .scrollContentBackground(.hidden)
             }
-            .scrollContentBackground(.hidden)
         }
         .frame(minWidth: 580, minHeight: 400)
         .onChange(of: selectedColor) { newColor in
@@ -151,12 +168,19 @@ struct AnnotationEditorView: View {
                 selectedTool = tool
             }
         }
-        .onChange(of: backgroundConfig) { newConfig in
+        .onChange(of: backgroundConfig) { [backgroundConfig] newConfig in
             newConfig.save()
-            // Content size changed — recapture and zoom to fit after layout updates.
-            DispatchQueue.main.async {
-                zoomHostHolder.host?.invalidateContentSize()
-                zoomHostHolder.host?.zoomToFit()
+            // Only zoom when canvas size changes significantly.
+            let sizeChanged = backgroundConfig.enabled != newConfig.enabled
+                || backgroundConfig.showWindowHeader != newConfig.showWindowHeader
+                || backgroundConfig.aspectRatio != newConfig.aspectRatio
+            if sizeChanged {
+                // Compute the new content size directly (layout hasn't updated yet).
+                let newSize = computeDocumentSize(for: newConfig)
+                zoomHostHolder.host?.setContentSize(newSize)
+                DispatchQueue.main.async {
+                    zoomHostHolder.host?.zoomToFit()
+                }
             }
         }
     }
@@ -232,19 +256,21 @@ struct AnnotationEditorView: View {
         )
 
         if backgroundConfig.enabled {
+            let extraPadding = aspectRatioPadding
             VStack(spacing: 0) {
                 if backgroundConfig.showWindowHeader {
                     windowHeaderView
                 }
                 canvas
             }
-            .clipShape(RoundedRectangle(cornerRadius: backgroundConfig.cornerRadius))
+            .clipShape(RoundedRectangle(cornerRadius: backgroundConfig.showWindowHeader ? 10 : backgroundConfig.cornerRadius))
             .shadow(
                 color: backgroundConfig.addShadow ? .black.opacity(0.4) : .clear,
                 radius: backgroundConfig.addShadow ? 20 : 0,
                 y: backgroundConfig.addShadow ? 4 : 0
             )
-            .padding(backgroundConfig.padding)
+            .padding(.horizontal, backgroundConfig.padding + extraPadding.width)
+            .padding(.vertical, backgroundConfig.padding + extraPadding.height)
             .background(backgroundGradient)
         } else {
             canvas
@@ -254,7 +280,7 @@ struct AnnotationEditorView: View {
     /// Dummy macOS window header with traffic lights and centered title.
     private var windowHeaderView: some View {
         ZStack {
-            Color(nsColor: NSColor(red: 0.91, green: 0.91, blue: 0.91, alpha: 1))
+            Color(nsColor: backgroundConfig.headerStyle.backgroundColor)
 
             HStack(spacing: 8) {
                 Circle().fill(Color(red: 1.0, green: 0.373, blue: 0.341)).frame(width: 12, height: 12)
@@ -266,9 +292,46 @@ struct AnnotationEditorView: View {
 
             Text(backgroundConfig.windowTitle)
                 .font(.system(size: 13))
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(nsColor: backgroundConfig.headerStyle.textColor))
         }
         .frame(height: 28)
+    }
+
+    /// Extra padding per axis to satisfy the aspect ratio constraint.
+    /// Mirrors the logic in ``BackgroundRenderer/render``.
+    private var aspectRatioPadding: CGSize {
+        guard let ratio = backgroundConfig.aspectRatio?.value else { return .zero }
+        let headerH = backgroundConfig.showWindowHeader ? BackgroundRenderer.headerHeight : 0
+        let canvasW = baseImage.size.width + backgroundConfig.padding * 2
+        let canvasH = baseImage.size.height + headerH + backgroundConfig.padding * 2
+        let currentRatio = canvasW / canvasH
+        if currentRatio > ratio {
+            // Too wide — add vertical padding
+            let newH = canvasW / ratio
+            return CGSize(width: 0, height: (newH - canvasH) / 2)
+        } else if currentRatio < ratio {
+            // Too tall — add horizontal padding
+            let newW = canvasH * ratio
+            return CGSize(width: (newW - canvasW) / 2, height: 0)
+        }
+        return .zero
+    }
+
+    /// Computes the total document size for a given config (for zoom-to-fit calculations).
+    private func computeDocumentSize(for config: BackgroundRenderer.Config) -> CGSize {
+        guard config.enabled else { return baseImage.size }
+        let headerH = config.showWindowHeader ? BackgroundRenderer.headerHeight : 0
+        var w = baseImage.size.width + config.padding * 2
+        var h = baseImage.size.height + headerH + config.padding * 2
+        if let ratio = config.aspectRatio?.value {
+            let currentRatio = w / h
+            if currentRatio > ratio {
+                h = w / ratio
+            } else if currentRatio < ratio {
+                w = h * ratio
+            }
+        }
+        return CGSize(width: w, height: h)
     }
 
     /// The background gradient or solid color for the live preview.

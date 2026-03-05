@@ -21,9 +21,6 @@ struct AnnotationToolbar: View {
     var canUndo: Bool
     var canRedo: Bool
 
-    /// The base screenshot image for the background preview.
-    var baseImage: NSImage = NSImage()
-
     // MARK: - Zoom
 
     var zoomLevel: CGFloat = 1.0
@@ -112,7 +109,6 @@ struct AnnotationToolbar: View {
                 .help("Background")
                 .popover(isPresented: $showBackgroundPopover) {
                     BackgroundToolView(
-                        screenshot: baseImage,
                         config: $backgroundConfig
                     )
                 }

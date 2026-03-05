@@ -7,9 +7,6 @@ import SwiftUI
 /// bound ``BackgroundRenderer/Config``.
 struct BackgroundToolView: View {
 
-    /// The source screenshot for the preview thumbnail.
-    let screenshot: NSImage
-
     /// Bound config — changes propagate live to the parent.
     @Binding var config: BackgroundRenderer.Config
 
@@ -51,11 +48,6 @@ struct BackgroundToolView: View {
             if config.enabled {
                 Divider()
 
-                // Preview
-                previewSection
-
-                Divider()
-
                 // Background selector
                 backgroundSection
 
@@ -69,6 +61,13 @@ struct BackgroundToolView: View {
                 Toggle("Window Header", isOn: $config.showWindowHeader)
 
                 if config.showWindowHeader {
+                    Picker("Style", selection: $config.headerStyle) {
+                        ForEach(BackgroundRenderer.HeaderStyle.allCases, id: \.self) { style in
+                            Text(style.label).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
                     TextField("Window Title", text: $config.windowTitle)
                         .textFieldStyle(.roundedBorder)
                 }
@@ -82,18 +81,6 @@ struct BackgroundToolView: View {
     }
 
     // MARK: - Sections
-
-    private var previewSection: some View {
-        Group {
-            if let preview = BackgroundRenderer.render(screenshot: screenshot, config: config) {
-                Image(nsImage: preview)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(maxHeight: 140)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-        }
-    }
 
     private var backgroundSection: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -142,12 +129,14 @@ struct BackgroundToolView: View {
                     .monospacedDigit()
             }
 
-            HStack {
-                Text("Corners")
-                Slider(value: $config.cornerRadius, in: 0...40, step: 2)
-                Text("\(Int(config.cornerRadius))")
-                    .frame(width: 30, alignment: .trailing)
-                    .monospacedDigit()
+            if !config.showWindowHeader {
+                HStack {
+                    Text("Corners")
+                    Slider(value: $config.cornerRadius, in: 0...40, step: 2)
+                    Text("\(Int(config.cornerRadius))")
+                        .frame(width: 30, alignment: .trailing)
+                        .monospacedDigit()
+                }
             }
         }
     }

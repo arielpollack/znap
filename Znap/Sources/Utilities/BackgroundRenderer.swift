@@ -40,9 +40,25 @@ enum BackgroundRenderer {
         var showWindowHeader: Bool = false
         /// The title displayed in the window header bar.
         var windowTitle: String = ""
+        /// The visual style of the window header bar.
+        var headerStyle: HeaderStyle = .light
 
         enum CodingKeys: String, CodingKey {
-            case enabled, backgroundType, padding, cornerRadius, addShadow, aspectRatio, showWindowHeader
+            case enabled, backgroundType, padding, cornerRadius, addShadow, aspectRatio, showWindowHeader, headerStyle
+        }
+
+        init() {}
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+            backgroundType = try c.decodeIfPresent(BackgroundType.self, forKey: .backgroundType) ?? .gradient(preset: 0)
+            padding = try c.decodeIfPresent(CGFloat.self, forKey: .padding) ?? 40
+            cornerRadius = try c.decodeIfPresent(CGFloat.self, forKey: .cornerRadius) ?? 10
+            addShadow = try c.decodeIfPresent(Bool.self, forKey: .addShadow) ?? true
+            aspectRatio = try c.decodeIfPresent(AspectRatio.self, forKey: .aspectRatio)
+            showWindowHeader = try c.decodeIfPresent(Bool.self, forKey: .showWindowHeader) ?? false
+            headerStyle = try c.decodeIfPresent(HeaderStyle.self, forKey: .headerStyle) ?? .light
         }
 
         // MARK: - Persistence
@@ -92,6 +108,38 @@ enum BackgroundRenderer {
             self.green = c.greenComponent
             self.blue = c.blueComponent
             self.alpha = c.alphaComponent
+        }
+    }
+
+    // MARK: - HeaderStyle
+
+    /// Visual style for the window header bar.
+    enum HeaderStyle: String, CaseIterable, Codable {
+        case light
+        case dark
+
+        /// Background color for the header bar.
+        var backgroundColor: NSColor {
+            switch self {
+            case .light: return NSColor(red: 0.91, green: 0.91, blue: 0.91, alpha: 1)
+            case .dark:  return NSColor(red: 0.227, green: 0.227, blue: 0.227, alpha: 1)
+            }
+        }
+
+        /// Text color for the title in the header bar.
+        var textColor: NSColor {
+            switch self {
+            case .light: return NSColor(red: 0.35, green: 0.35, blue: 0.35, alpha: 1)
+            case .dark:  return NSColor(red: 0.85, green: 0.85, blue: 0.85, alpha: 1)
+            }
+        }
+
+        /// Human-readable label.
+        var label: String {
+            switch self {
+            case .light: return "Light"
+            case .dark:  return "Dark"
+            }
         }
     }
 
@@ -226,6 +274,9 @@ enum BackgroundRenderer {
             height: contentHeight
         )
 
+        // When header is shown, use fixed 10pt radius (like a real macOS window).
+        let cornerR: CGFloat = config.showWindowHeader ? 10 : config.cornerRadius
+
         // Draw shadow if enabled (around the combined content rect)
         if config.addShadow {
             let context = NSGraphicsContext.current!
@@ -236,7 +287,7 @@ enum BackgroundRenderer {
             shadow.shadowBlurRadius = 20
             shadow.set()
 
-            let shadowPath = NSBezierPath(roundedRect: contentRect, xRadius: config.cornerRadius, yRadius: config.cornerRadius)
+            let shadowPath = NSBezierPath(roundedRect: contentRect, xRadius: cornerR, yRadius: cornerR)
             NSColor.white.setFill()
             shadowPath.fill()
             context.restoreGraphicsState()
@@ -245,7 +296,7 @@ enum BackgroundRenderer {
         // Clip to the combined content rect with rounded corners
         let context = NSGraphicsContext.current!
         context.saveGraphicsState()
-        let clipPath = NSBezierPath(roundedRect: contentRect, xRadius: config.cornerRadius, yRadius: config.cornerRadius)
+        let clipPath = NSBezierPath(roundedRect: contentRect, xRadius: cornerR, yRadius: cornerR)
         clipPath.addClip()
 
         // Draw screenshot in the image rect
@@ -261,7 +312,7 @@ enum BackgroundRenderer {
             )
 
             // Header background
-            NSColor(red: 0.91, green: 0.91, blue: 0.91, alpha: 1).setFill()
+            config.headerStyle.backgroundColor.setFill()
             headerRect.fill()
 
             // Traffic lights
@@ -283,7 +334,7 @@ enum BackgroundRenderer {
                 let font = NSFont.systemFont(ofSize: 13, weight: .regular)
                 let attributes: [NSAttributedString.Key: Any] = [
                     .font: font,
-                    .foregroundColor: NSColor.secondaryLabelColor,
+                    .foregroundColor: config.headerStyle.textColor,
                 ]
                 let titleStr = config.windowTitle as NSString
                 let titleSize = titleStr.size(withAttributes: attributes)
@@ -297,4 +348,5 @@ enum BackgroundRenderer {
 
         return result
     }
+
 }

@@ -28,8 +28,17 @@ final class AnnotationEditorWindow: NSPanel {
         let bgConfig = BackgroundRenderer.Config.load()
         let bgExtra: CGFloat = bgConfig.enabled ? bgConfig.padding * 2 : 0
         let headerExtra: CGFloat = bgConfig.enabled && bgConfig.showWindowHeader ? BackgroundRenderer.headerHeight : 0
-        let docW = image.size.width + bgExtra
-        let docH = image.size.height + bgExtra + headerExtra
+        var docW = image.size.width + bgExtra
+        var docH = image.size.height + bgExtra + headerExtra
+
+        if bgConfig.enabled, let ratio = bgConfig.aspectRatio?.value {
+            let currentRatio = docW / docH
+            if currentRatio > ratio {
+                docH = docW / ratio
+            } else if currentRatio < ratio {
+                docW = docH * ratio
+            }
+        }
 
         // Window sized so viewport = document, capped to screen.
         let maxW = screenFrame.width - 40

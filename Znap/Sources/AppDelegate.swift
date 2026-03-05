@@ -149,27 +149,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    /// Returns the owner name of the frontmost on-screen window that doesn't
-    /// belong to Znap. Falls back to an empty string.
+    /// Returns the name of the frontmost application (excluding Znap itself).
     private static func frontmostWindowName() -> String {
-        let ownPID = ProcessInfo.processInfo.processIdentifier
-        guard let windowList = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly, .excludeDesktopElements],
-            kCGNullWindowID
-        ) as? [[CFString: Any]] else { return "" }
-
-        for entry in windowList {
-            guard let pid = entry[kCGWindowOwnerPID] as? Int32,
-                  pid != ownPID,
-                  let name = entry[kCGWindowOwnerName] as? String,
-                  let boundsDict = entry[kCGWindowBounds] as? [String: CGFloat],
-                  let width = boundsDict["Width"],
-                  let height = boundsDict["Height"],
-                  width > 10, height > 10
-            else { continue }
-            return name
-        }
-        return ""
+        guard let app = NSWorkspace.shared.frontmostApplication,
+              app.bundleIdentifier != Bundle.main.bundleIdentifier else { return "" }
+        return app.localizedName ?? ""
     }
 
     /// Shows the captured image — either in the annotation editor (if autoOpenEditor
