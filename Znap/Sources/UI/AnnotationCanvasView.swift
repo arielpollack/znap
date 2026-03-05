@@ -88,7 +88,7 @@ struct AnnotationCanvasView: View {
                     alpha: selectedColor.alpha
                 ),
                 fontSize: selectedTool == .handwriting ? 24 : 16,
-                fontName: selectedTool == .handwriting ? "Bradley Hand" : nil,
+                fontName: selectedTool == .handwriting ? "IndieFlower-Regular" : nil,
                 annotations: annotations,
                 selectedAnnotationID: selectedAnnotationID,
                 onDragStarted: { location in
@@ -575,7 +575,7 @@ struct AnnotationCanvasView: View {
         let fontSize = annotation.fontSize ?? 24
 
         let text = Text(string)
-            .font(.custom("Bradley Hand", size: fontSize))
+            .font(.custom("IndieFlower-Regular", size: fontSize))
             .foregroundColor(color)
 
         context.draw(

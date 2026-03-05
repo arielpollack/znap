@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// Holds a reference to the ``MagnificationHostView`` so that zoom actions
+/// can be invoked reliably from toolbar button closures.
+private class ZoomHostHolder {
+    var host: MagnificationHostView?
+}
+
 /// The root SwiftUI view for the annotation editor.
 ///
 /// Combines ``AnnotationToolbar`` (top) with a scrollable ``AnnotationCanvasView``
@@ -10,7 +16,7 @@ struct AnnotationEditorView: View {
 
     @State private var document: AnnotationDocument
     @State private var selectedTool: AnnotationDocument.AnnotationType = .arrow
-    @State private var selectedColor: AnnotationDocument.CodableColor = .defaultRed
+    @State private var selectedColor: AnnotationDocument.CodableColor = Self.loadSavedColor()
     @State private var strokeWidth: CGFloat = 3
     @State private var undoStack: [[AnnotationDocument.Annotation]] = []
     @State private var redoStack: [[AnnotationDocument.Annotation]] = []
@@ -20,7 +26,8 @@ struct AnnotationEditorView: View {
     /// Suppresses spurious undo pushes when loading a selected annotation's properties.
     @State private var isLoadingSelection = false
     @State private var zoomLevel: CGFloat = 1.0
-    @State private var zoomHost: MagnificationHostView?
+    /// Class-based holder so toolbar closures always see the current host reference.
+    private let zoomHostHolder = ZoomHostHolder()
     @State private var backgroundConfig: BackgroundRenderer.Config = BackgroundRenderer.Config.load()
 
     /// The original NSImage, kept for rendering the base image in the canvas.
@@ -92,10 +99,10 @@ struct AnnotationEditorView: View {
                 canRedo: !redoStack.isEmpty,
                 baseImage: baseImage,
                 zoomLevel: zoomLevel,
-                onZoomIn: { zoomHost?.zoomIn() },
-                onZoomOut: { zoomHost?.zoomOut() },
-                onZoomToFit: { zoomHost?.zoomToFit() },
-                onZoomToActualSize: { zoomHost?.zoomToActualSize() }
+                onZoomIn: { zoomHostHolder.host?.zoomIn() },
+                onZoomOut: { zoomHostHolder.host?.zoomOut() },
+                onZoomToFit: { zoomHostHolder.host?.zoomToFit() },
+                onZoomToActualSize: { zoomHostHolder.host?.zoomToActualSize() }
             )
 
             Divider()
@@ -109,7 +116,7 @@ struct AnnotationEditorView: View {
                                 zoomLevel = mag
                             },
                             onHostReady: { host in
-                                zoomHost = host
+                                zoomHostHolder.host = host
                             }
                         )
                         .frame(width: 0, height: 0)
@@ -120,6 +127,7 @@ struct AnnotationEditorView: View {
         .frame(minWidth: 580, minHeight: 400)
         .onChange(of: selectedColor) { newColor in
             applyPropertyToSelected { $0.color = newColor }
+            Self.saveColor(newColor)
         }
         .onChange(of: strokeWidth) { newWidth in
             applyPropertyToSelected { $0.strokeWidth = newWidth }
@@ -139,8 +147,8 @@ struct AnnotationEditorView: View {
             newConfig.save()
             // Content size changed — recapture and zoom to fit after layout updates.
             DispatchQueue.main.async {
-                zoomHost?.invalidateContentSize()
-                zoomHost?.zoomToFit()
+                zoomHostHolder.host?.invalidateContentSize()
+                zoomHostHolder.host?.zoomToFit()
             }
         }
     }
@@ -404,6 +412,23 @@ struct AnnotationEditorView: View {
         }
 
         return composited
+    }
+
+    // MARK: - Color Persistence
+
+    private static let colorDefaultsKey = "annotationSelectedColor"
+
+    private static func loadSavedColor() -> AnnotationDocument.CodableColor {
+        guard let data = UserDefaults.standard.data(forKey: colorDefaultsKey),
+              let color = try? JSONDecoder().decode(AnnotationDocument.CodableColor.self, from: data)
+        else { return .defaultRed }
+        return color
+    }
+
+    private static func saveColor(_ color: AnnotationDocument.CodableColor) {
+        if let data = try? JSONEncoder().encode(color) {
+            UserDefaults.standard.set(data, forKey: colorDefaultsKey)
+        }
     }
 }
 

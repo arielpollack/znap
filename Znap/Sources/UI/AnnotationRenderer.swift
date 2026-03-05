@@ -213,7 +213,7 @@ enum AnnotationRenderer {
         guard let string = annotation.text, !string.isEmpty else { return }
 
         let fontSize = annotation.fontSize ?? 24
-        let font = CTFontCreateWithName("Bradley Hand" as CFString, fontSize, nil)
+        let font = CTFontCreateWithName("IndieFlower-Regular" as CFString, fontSize, nil)
         let color = annotation.color.nsColor
 
         let attributes: [NSAttributedString.Key: Any] = [

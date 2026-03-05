@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Carbon
+import CoreText
 import ScreenCaptureKit
 import Sparkle
 import UserNotifications
@@ -8,7 +9,17 @@ import UserNotifications
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
     func applicationDidFinishLaunching(_ notification: Notification) {
+        registerCustomFonts()
         registerHotkeys()
+    }
+
+    private func registerCustomFonts() {
+        if let url = Bundle.main.url(forResource: "IndieFlower-Regular", withExtension: "ttf") {
+            var error: Unmanaged<CFError>?
+            if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
+                print("Failed to register IndieFlower font: \(String(describing: error?.takeRetainedValue()))")
+            }
+        }
     }
 
     private func registerHotkeys() {

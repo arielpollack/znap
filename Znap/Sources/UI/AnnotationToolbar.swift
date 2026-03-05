@@ -32,9 +32,10 @@ struct AnnotationToolbar: View {
     var onZoomToFit: () -> Void = {}
     var onZoomToActualSize: () -> Void = {}
 
-    // MARK: - Background Popover
+    // MARK: - Popovers
 
     @State private var showBackgroundPopover = false
+    @State private var showColorPopover = false
 
     // MARK: - Tool Definitions
 
@@ -154,37 +155,65 @@ struct AnnotationToolbar: View {
 
             Divider()
 
-            // Row 2: Colors + stroke width
+            // Row 2: Color picker + stroke width
             HStack(spacing: 4) {
-                ForEach(Self.paletteColors, id: \.0) { name, codableColor in
-                    Button {
-                        selectedColor = codableColor
-                    } label: {
-                        Circle()
-                            .fill(Color(
-                                red: codableColor.red,
-                                green: codableColor.green,
-                                blue: codableColor.blue,
-                                opacity: codableColor.alpha
-                            ))
-                            .frame(width: 16, height: 16)
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(
-                                        selectedColor == codableColor
-                                            ? Color.primary
-                                            : Color.clear,
-                                        lineWidth: 2
-                                    )
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .help(name)
+                Button {
+                    showColorPopover = true
+                } label: {
+                    Circle()
+                        .fill(Color(
+                            red: selectedColor.red,
+                            green: selectedColor.green,
+                            blue: selectedColor.blue,
+                            opacity: selectedColor.alpha
+                        ))
+                        .frame(width: 20, height: 20)
+                        .overlay(
+                            Circle()
+                                .strokeBorder(Color.primary.opacity(0.3), lineWidth: 1)
+                        )
                 }
+                .buttonStyle(.plain)
+                .help("Color")
+                .popover(isPresented: $showColorPopover) {
+                    VStack(spacing: 8) {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 28))], spacing: 6) {
+                            ForEach(Self.paletteColors, id: \.0) { name, codableColor in
+                                Button {
+                                    selectedColor = codableColor
+                                    showColorPopover = false
+                                } label: {
+                                    Circle()
+                                        .fill(Color(
+                                            red: codableColor.red,
+                                            green: codableColor.green,
+                                            blue: codableColor.blue,
+                                            opacity: codableColor.alpha
+                                        ))
+                                        .frame(width: 24, height: 24)
+                                        .overlay(
+                                            Circle()
+                                                .strokeBorder(
+                                                    selectedColor == codableColor
+                                                        ? Color.primary
+                                                        : Color.primary.opacity(0.15),
+                                                    lineWidth: selectedColor == codableColor ? 2 : 1
+                                                )
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                                .help(name)
+                            }
+                        }
 
-                ColorPicker("", selection: customColorBinding)
-                    .labelsHidden()
-                    .frame(width: 24)
+                        Divider()
+
+                        ColorPicker("Custom color", selection: customColorBinding)
+                            .labelsHidden()
+                    }
+                    .padding(10)
+                    .frame(width: 160)
+                }
 
                 Divider().frame(height: 18).padding(.horizontal, 4)
 
@@ -203,6 +232,7 @@ struct AnnotationToolbar: View {
                 // Zoom controls
                 Button(action: onZoomOut) {
                     Image(systemName: "minus.magnifyingglass")
+                        .frame(width: 26, height: 26)
                 }
                 .buttonStyle(.plain)
                 .help("Zoom Out (⌘−)")
@@ -213,18 +243,21 @@ struct AnnotationToolbar: View {
 
                 Button(action: onZoomIn) {
                     Image(systemName: "plus.magnifyingglass")
+                        .frame(width: 26, height: 26)
                 }
                 .buttonStyle(.plain)
                 .help("Zoom In (⌘+)")
 
                 Button(action: onZoomToFit) {
                     Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .frame(width: 26, height: 26)
                 }
                 .buttonStyle(.plain)
                 .help("Zoom to Fit (⌘0)")
 
                 Button(action: onZoomToActualSize) {
                     Image(systemName: "1.magnifyingglass")
+                        .frame(width: 26, height: 26)
                 }
                 .buttonStyle(.plain)
                 .help("Actual Size (⌘1)")
