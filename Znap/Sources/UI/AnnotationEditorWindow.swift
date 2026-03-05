@@ -27,8 +27,9 @@ final class AnnotationEditorWindow: NSPanel {
         // Full document size in the scroll view = image + background.
         let bgConfig = BackgroundRenderer.Config.load()
         let bgExtra: CGFloat = bgConfig.enabled ? bgConfig.padding * 2 : 0
+        let headerExtra: CGFloat = bgConfig.enabled && bgConfig.showWindowHeader ? BackgroundRenderer.headerHeight : 0
         let docW = image.size.width + bgExtra
-        let docH = image.size.height + bgExtra
+        let docH = image.size.height + bgExtra + headerExtra
 
         // Window sized so viewport = document, capped to screen.
         let maxW = screenFrame.width - 40

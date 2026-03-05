@@ -68,10 +68,11 @@ struct AnnotationEditorView: View {
         var bgConfig = BackgroundRenderer.Config.load()
         bgConfig.windowTitle = windowTitle
         let bgExtra: CGFloat = bgConfig.enabled ? bgConfig.padding * 2 : 0
+        let headerExtra: CGFloat = bgConfig.enabled && bgConfig.showWindowHeader ? BackgroundRenderer.headerHeight : 0
 
         // Full document size (what the scroll view contains at magnification 1).
         let docW = image.size.width + bgExtra
-        let docH = image.size.height + bgExtra
+        let docH = image.size.height + bgExtra + headerExtra
 
         // Viewport = window size (capped to screen) minus chrome.
         let maxW = screenFrame.width - 40
