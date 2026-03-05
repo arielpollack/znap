@@ -36,6 +36,14 @@ enum BackgroundRenderer {
         var addShadow: Bool = true
         /// Optional aspect ratio constraint for the canvas.
         var aspectRatio: AspectRatio? = nil
+        /// Whether to show a dummy macOS window header bar.
+        var showWindowHeader: Bool = false
+        /// The title displayed in the window header bar.
+        var windowTitle: String = ""
+
+        enum CodingKeys: String, CodingKey {
+            case enabled, backgroundType, padding, cornerRadius, addShadow, aspectRatio, showWindowHeader
+        }
 
         // MARK: - Persistence
 
@@ -136,6 +144,23 @@ enum BackgroundRenderer {
         (.systemBlue, .systemTeal),
     ]
 
+    // MARK: - Window Header Constants
+
+    /// Height of the dummy macOS window header bar in points.
+    static let headerHeight: CGFloat = 28
+    /// Diameter of each traffic light circle.
+    private static let trafficLightSize: CGFloat = 12
+    /// Left inset for the first traffic light circle center.
+    private static let trafficLightInset: CGFloat = 14
+    /// Spacing between traffic light circle centers.
+    private static let trafficLightSpacing: CGFloat = 20
+    /// Traffic light colors: close (red), minimize (yellow), zoom (green).
+    private static let trafficLightColors: [NSColor] = [
+        NSColor(red: 1.0, green: 0.373, blue: 0.341, alpha: 1),   // #FF5F57
+        NSColor(red: 0.996, green: 0.737, blue: 0.180, alpha: 1),  // #FEBC2E
+        NSColor(red: 0.157, green: 0.784, blue: 0.251, alpha: 1),  // #28C840
+    ]
+
     // MARK: - Render
 
     /// Renders the screenshot onto a styled background.
@@ -147,19 +172,18 @@ enum BackgroundRenderer {
     static func render(screenshot: NSImage, config: Config) -> NSImage? {
         let imgWidth = screenshot.size.width
         let imgHeight = screenshot.size.height
+        let headerH = config.showWindowHeader ? headerHeight : 0
 
-        // Calculate canvas size
+        // Calculate canvas size (image + header + padding)
         var canvasWidth = imgWidth + config.padding * 2
-        var canvasHeight = imgHeight + config.padding * 2
+        var canvasHeight = imgHeight + headerH + config.padding * 2
 
         // Apply aspect ratio constraint
         if let ratio = config.aspectRatio?.value {
             let currentRatio = canvasWidth / canvasHeight
             if currentRatio > ratio {
-                // Canvas is too wide; increase height
                 canvasHeight = canvasWidth / ratio
             } else {
-                // Canvas is too tall; increase width
                 canvasWidth = canvasHeight * ratio
             }
         }
@@ -180,21 +204,29 @@ enum BackgroundRenderer {
             if let gradient = NSGradient(starting: startColor, ending: endColor) {
                 gradient.draw(in: canvasRect, angle: 135)
             }
-
         case .solid(let codableColor):
             codableColor.nsColor.setFill()
             canvasRect.fill()
         }
 
-        // Calculate centered image rect
+        // Calculate centered image rect (shifted down by header height)
+        let contentHeight = imgHeight + headerH
         let imageRect = NSRect(
             x: (canvasWidth - imgWidth) / 2,
-            y: (canvasHeight - imgHeight) / 2,
+            y: (canvasHeight - contentHeight) / 2,
             width: imgWidth,
             height: imgHeight
         )
 
-        // Draw shadow if enabled
+        // The combined rect encompasses both image and header
+        let contentRect = NSRect(
+            x: imageRect.minX,
+            y: imageRect.minY,
+            width: imgWidth,
+            height: contentHeight
+        )
+
+        // Draw shadow if enabled (around the combined content rect)
         if config.addShadow {
             let context = NSGraphicsContext.current!
             context.saveGraphicsState()
@@ -204,17 +236,64 @@ enum BackgroundRenderer {
             shadow.shadowBlurRadius = 20
             shadow.set()
 
-            // Draw a filled rect so the shadow is visible
-            let shadowPath = NSBezierPath(roundedRect: imageRect, xRadius: config.cornerRadius, yRadius: config.cornerRadius)
+            let shadowPath = NSBezierPath(roundedRect: contentRect, xRadius: config.cornerRadius, yRadius: config.cornerRadius)
             NSColor.white.setFill()
             shadowPath.fill()
             context.restoreGraphicsState()
         }
 
-        // Draw screenshot with rounded corners
-        let clipPath = NSBezierPath(roundedRect: imageRect, xRadius: config.cornerRadius, yRadius: config.cornerRadius)
+        // Clip to the combined content rect with rounded corners
+        let context = NSGraphicsContext.current!
+        context.saveGraphicsState()
+        let clipPath = NSBezierPath(roundedRect: contentRect, xRadius: config.cornerRadius, yRadius: config.cornerRadius)
         clipPath.addClip()
+
+        // Draw screenshot in the image rect
         screenshot.draw(in: imageRect, from: .zero, operation: .sourceOver, fraction: 1.0)
+
+        // Draw window header if enabled
+        if config.showWindowHeader {
+            let headerRect = NSRect(
+                x: imageRect.minX,
+                y: imageRect.maxY,
+                width: imgWidth,
+                height: headerH
+            )
+
+            // Header background
+            NSColor(red: 0.91, green: 0.91, blue: 0.91, alpha: 1).setFill()
+            headerRect.fill()
+
+            // Traffic lights
+            let circleY = headerRect.midY
+            for (i, color) in trafficLightColors.enumerated() {
+                let cx = headerRect.minX + trafficLightInset + CGFloat(i) * trafficLightSpacing
+                let circleRect = NSRect(
+                    x: cx - trafficLightSize / 2,
+                    y: circleY - trafficLightSize / 2,
+                    width: trafficLightSize,
+                    height: trafficLightSize
+                )
+                color.setFill()
+                NSBezierPath(ovalIn: circleRect).fill()
+            }
+
+            // Title text centered in header
+            if !config.windowTitle.isEmpty {
+                let font = NSFont.systemFont(ofSize: 13, weight: .regular)
+                let attributes: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: NSColor.secondaryLabelColor,
+                ]
+                let titleStr = config.windowTitle as NSString
+                let titleSize = titleStr.size(withAttributes: attributes)
+                let titleX = headerRect.midX - titleSize.width / 2
+                let titleY = headerRect.midY - titleSize.height / 2
+                titleStr.draw(at: NSPoint(x: titleX, y: titleY), withAttributes: attributes)
+            }
+        }
+
+        context.restoreGraphicsState()
 
         return result
     }
