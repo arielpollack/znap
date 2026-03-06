@@ -51,6 +51,7 @@ final class RecordingService: NSObject, ObservableObject {
     private var elapsedTimer: Timer?
     private var recordingStartDate: Date?
     private var currentConfig: RecordingConfig?
+    private var excludedWindowIDs: [CGWindowID] = []
 
     private override init() {
         super.init()
@@ -61,12 +62,13 @@ final class RecordingService: NSObject, ObservableObject {
     /// Start recording the screen with the given configuration.
     ///
     /// - Parameter config: Describes what to record (area, window, display) and how (FPS, audio, etc.).
-    func startRecording(config: RecordingConfig) async throws {
+    func startRecording(config: RecordingConfig, excludeWindowIDs: [CGWindowID] = []) async throws {
         guard !isRecording else {
             throw RecordingError.alreadyRecording
         }
 
         currentConfig = config
+        excludedWindowIDs = excludeWindowIDs
 
         // 1. Get shareable content
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
@@ -93,7 +95,8 @@ final class RecordingService: NSObject, ObservableObject {
            let window = content.windows.first(where: { $0.windowID == windowID }) {
             filter = SCContentFilter(desktopIndependentWindow: window)
         } else {
-            filter = SCContentFilter(display: display, excludingWindows: [])
+            let excludeWindows = content.windows.filter { excludedWindowIDs.contains($0.windowID) }
+            filter = SCContentFilter(display: display, excludingWindows: excludeWindows)
         }
 
         // 4. Configure stream

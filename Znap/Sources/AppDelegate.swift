@@ -1,5 +1,4 @@
 import AppKit
-import AVFoundation
 import Carbon
 import CoreText
 import ScreenCaptureKit
@@ -71,13 +70,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             keyCode: UInt32(kVK_ANSI_7),
             modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
             handler: { [weak self] in self?.startScrollCapture() }
-        )
-
-        // Cmd+Shift+P for toggle all pinned screenshots (kVK_ANSI_P)
-        HotkeyService.shared.register(
-            keyCode: UInt32(kVK_ANSI_P),
-            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
-            handler: { PinnedScreenshotPanel.toggleAllVisibility() }
         )
 
         // Cmd+Shift+1 for All-In-One HUD (kVK_ANSI_1)
@@ -303,34 +295,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func toggleRecording() {
-        let windowTitle = Self.frontmostWindowName()
         Task { @MainActor in
             let service = RecordingService.shared
             if service.isRecording {
-                // Stop the current recording and show result
+                RecordingIndicatorPanel.dismiss()
                 if let url = await service.stopRecording() {
-                    // Create a thumbnail from the first frame of the video
-                    let asset = AVURLAsset(url: url)
-                    let generator = AVAssetImageGenerator(asset: asset)
-                    generator.appliesPreferredTrackTransform = true
-
-                    if let cgImage = try? generator.copyCGImage(
-                        at: .zero,
-                        actualTime: nil
-                    ) {
-                        let thumbnail = Self.nsImage(from: cgImage)
-                        self.showCaptureResult(thumbnail, type: "recording", windowTitle: windowTitle)
-                    }
+                    VideoEditorPanel.show(videoURL: url)
                 }
             } else {
-                // Show area selection overlay, then start recording
                 OverlayWindow.beginAreaSelection { rect in
                     guard let rect = rect else { return }
                     Task { @MainActor in
                         do {
+                            RecordingIndicatorPanel.show()
+                            let excludeIDs = [RecordingIndicatorPanel.windowID].filter { $0 != 0 }
                             let config = RecordingService.RecordingConfig(rect: rect)
-                            try await RecordingService.shared.startRecording(config: config)
+                            try await RecordingService.shared.startRecording(
+                                config: config,
+                                excludeWindowIDs: excludeIDs
+                            )
                         } catch {
+                            RecordingIndicatorPanel.dismiss()
                             print("Recording failed to start: \(error)")
                         }
                     }
