@@ -181,17 +181,36 @@ struct AnnotationCanvasView: View {
     /// Extracted from `body` to keep the type-checker happy.
     private var annotationCanvas: some View {
         Canvas { context, size in
-            for annotation in annotations {
-                drawAnnotation(annotation, in: &context, canvasSize: size)
-            }
-
+            // Pre-apply all image-filter annotations (pixelate, blur, spotlight)
+            // cumulatively so they compose on top of each other instead of each
+            // one overwriting the previous.
+            let allAnnotations: [AnnotationDocument.Annotation]
             if let start = dragStart, let end = dragEnd {
                 let inProgress = makeAnnotation(
                     start: start,
                     end: end,
                     points: freehandPoints.isEmpty ? nil : freehandPoints
                 )
-                drawAnnotation(inProgress, in: &context, canvasSize: size)
+                allAnnotations = annotations + [inProgress]
+            } else {
+                allAnnotations = annotations
+            }
+
+            let filterAnnotations = allAnnotations.filter {
+                AnnotationRenderer.imageFilterTypes.contains($0.type)
+            }
+            if !filterAnnotations.isEmpty,
+               let cgImage = baseImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                let filtered = AnnotationRenderer.applyImageFilters(
+                    filterAnnotations, to: cgImage, canvasSize: size
+                )
+                let filteredNS = NSImage(cgImage: filtered, size: size)
+                context.draw(Image(nsImage: filteredNS), in: CGRect(origin: .zero, size: size))
+            }
+
+            // Draw non-filter annotations only.
+            for annotation in allAnnotations where !AnnotationRenderer.imageFilterTypes.contains(annotation.type) {
+                drawAnnotation(annotation, in: &context, canvasSize: size)
             }
 
             if let hovID = hoveredAnnotationID,

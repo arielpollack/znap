@@ -172,9 +172,14 @@ final class RecordingIndicatorPanel: NSPanel {
         stopRecording()
     }
 
-    /// Stops the recording by calling through to AppDelegate.
+    /// Stops the recording, dismisses the pill, and opens the video editor.
     private func stopRecording() {
-        (NSApp.delegate as? AppDelegate)?.toggleRecording()
+        Task { @MainActor in
+            Self.dismiss()
+            if let url = await RecordingService.shared.stopRecording() {
+                VideoEditorPanel.show(videoURL: url)
+            }
+        }
     }
 
     // MARK: - Timers

@@ -32,12 +32,6 @@ struct ZnapApp: App {
 
             Divider()
 
-            // Pins
-            Button("Toggle Pins (\u{2318}\u{21e7}P)") { PinnedScreenshotPanel.toggleAllVisibility() }
-            Button("Close All Pins") { PinnedScreenshotPanel.closeAll() }
-
-            Divider()
-
             // Desktop icons toggle
             Button(DesktopIconManager.shared.iconsHidden ? "Show Desktop Icons" : "Hide Desktop Icons") {
                 if DesktopIconManager.shared.iconsHidden {

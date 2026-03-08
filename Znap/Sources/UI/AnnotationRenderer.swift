@@ -273,6 +273,39 @@ enum AnnotationRenderer {
         ctx.restoreGState()
     }
 
+    // MARK: - Cumulative Image Filters
+
+    /// Filter annotation types that modify the base image rather than drawing on top.
+    static let imageFilterTypes: Set<AnnotationDocument.AnnotationType> = [.pixelate, .blur, .spotlight]
+
+    /// Applies all image-filter annotations (pixelate, blur, spotlight) cumulatively
+    /// to the base image. Each filter reads from the result of the previous one,
+    /// so multiple filters compose correctly instead of overwriting each other.
+    static func applyImageFilters(
+        _ annotations: [AnnotationDocument.Annotation],
+        to baseImage: CGImage,
+        canvasSize: CGSize
+    ) -> CGImage {
+        var result = baseImage
+        for annotation in annotations {
+            let rect = rectFromPoints(annotation.startPoint, annotation.endPoint)
+            let pixelRect = pointRectToPixelRect(rect, imageSize: result, canvasSize: canvasSize)
+            let filtered: CGImage?
+            switch annotation.type {
+            case .pixelate:
+                filtered = ImageFilters.pixelate(image: result, region: pixelRect)
+            case .blur:
+                filtered = ImageFilters.blur(image: result, region: pixelRect)
+            case .spotlight:
+                filtered = ImageFilters.spotlight(image: result, region: pixelRect)
+            default:
+                filtered = nil
+            }
+            if let f = filtered { result = f }
+        }
+        return result
+    }
+
     // MARK: - Pixelate / Blur / Spotlight
 
     private static func drawPixelate(
@@ -289,7 +322,7 @@ enum AnnotationRenderer {
 
         let pixelRect = pointRectToPixelRect(rect, imageSize: base, canvasSize: cs)
         if let filtered = ImageFilters.pixelate(image: base, region: pixelRect) {
-            ctx.draw(filtered, in: CGRect(origin: .zero, size: cs))
+            drawCGImage(filtered, in: ctx, size: cs)
         }
     }
 
@@ -307,7 +340,7 @@ enum AnnotationRenderer {
 
         let pixelRect = pointRectToPixelRect(rect, imageSize: base, canvasSize: cs)
         if let filtered = ImageFilters.blur(image: base, region: pixelRect) {
-            ctx.draw(filtered, in: CGRect(origin: .zero, size: cs))
+            drawCGImage(filtered, in: ctx, size: cs)
         }
     }
 
@@ -325,8 +358,21 @@ enum AnnotationRenderer {
 
         let pixelRect = pointRectToPixelRect(rect, imageSize: base, canvasSize: cs)
         if let filtered = ImageFilters.spotlight(image: base, region: pixelRect) {
-            ctx.draw(filtered, in: CGRect(origin: .zero, size: cs))
+            drawCGImage(filtered, in: ctx, size: cs)
         }
+    }
+
+    /// Draws a CGImage correctly in a flipped (top-left origin) context.
+    ///
+    /// `CGContext.draw` maps image-top to increasing-y, which in a flipped
+    /// context points downward, producing an upside-down result. This helper
+    /// temporarily un-flips the context for the draw call.
+    private static func drawCGImage(_ image: CGImage, in ctx: CGContext, size: CGSize) {
+        ctx.saveGState()
+        ctx.translateBy(x: 0, y: size.height)
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.draw(image, in: CGRect(origin: .zero, size: size))
+        ctx.restoreGState()
     }
 
     /// Converts a rect from point coordinates (top-left origin) to pixel

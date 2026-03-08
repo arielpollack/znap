@@ -462,52 +462,60 @@ struct AnnotationEditorView: View {
         let pointSize = document.canvasSize
         guard pointSize.width > 0, pointSize.height > 0 else { return nil }
 
-        // Get actual pixel dimensions from the bitmap rep for full-resolution export.
-        guard let tiffData = baseImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let cgImage = bitmap.cgImage else { return nil }
+        guard let cgImage = baseImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
 
-        let pixelWidth = cgImage.width
-        let pixelHeight = cgImage.height
+        // Pre-apply all image filter annotations (pixelate, blur, spotlight)
+        // cumulatively so they compose correctly instead of overwriting each other.
+        let filterAnnotations = document.annotations.filter {
+            AnnotationRenderer.imageFilterTypes.contains($0.type)
+        }
+        let filteredBase = AnnotationRenderer.applyImageFilters(
+            filterAnnotations, to: cgImage, canvasSize: pointSize
+        )
+
+        let pixelWidth = filteredBase.width
+        let pixelHeight = filteredBase.height
         let scaleX = CGFloat(pixelWidth) / pointSize.width
         let scaleY = CGFloat(pixelHeight) / pointSize.height
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
 
-        guard let ctx = CGContext(
-            data: nil,
-            width: pixelWidth,
-            height: pixelHeight,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
+        // Draw at pixel dimensions to preserve full Retina resolution.
+        let pixelSize = NSSize(width: CGFloat(pixelWidth), height: CGFloat(pixelHeight))
+        let result = NSImage(size: pixelSize)
 
-        // Draw base image in default CG coordinates (bottom-left origin).
-        ctx.saveGState()
-        ctx.scaleBy(x: scaleX, y: scaleY)
-        ctx.draw(cgImage, in: CGRect(origin: .zero, size: pointSize))
-        ctx.restoreGState()
+        result.lockFocus()
 
-        // Flip context to match top-left origin for annotations (SwiftUI coordinate system).
-        ctx.translateBy(x: 0, y: CGFloat(pixelHeight))
-        ctx.scaleBy(x: 1, y: -1)
-        ctx.scaleBy(x: scaleX, y: scaleY)
+        // Draw filtered base image using NSImage.draw which handles coordinate systems.
+        let filteredNSImage = NSImage(cgImage: filteredBase, size: pixelSize)
+        filteredNSImage.draw(
+            in: NSRect(origin: .zero, size: pixelSize),
+            from: .zero,
+            operation: .sourceOver,
+            fraction: 1.0
+        )
 
-        // Draw all annotations (in point coordinates, scaled by context).
-        for annotation in document.annotations {
-            AnnotationRenderer.draw(annotation, in: ctx, baseImage: cgImage, canvasSize: pointSize)
+        // Draw non-filter annotations via CGContext.
+        if let ctx = NSGraphicsContext.current?.cgContext {
+            // lockFocus uses bottom-left origin; annotations use top-left (SwiftUI).
+            ctx.translateBy(x: 0, y: CGFloat(pixelHeight))
+            ctx.scaleBy(x: 1, y: -1)
+            ctx.scaleBy(x: scaleX, y: scaleY)
+
+            for annotation in document.annotations where !AnnotationRenderer.imageFilterTypes.contains(annotation.type) {
+                AnnotationRenderer.draw(annotation, in: ctx, baseImage: filteredBase, canvasSize: pointSize)
+            }
         }
 
-        guard let resultCGImage = ctx.makeImage() else { return nil }
-        let composited = NSImage(cgImage: resultCGImage, size: pointSize)
+        result.unlockFocus()
+
+        // Set point size for display/background rendering.
+        result.size = pointSize
 
         // Apply background if enabled.
         if backgroundConfig.enabled {
-            return BackgroundRenderer.render(screenshot: composited, config: backgroundConfig)
+            return BackgroundRenderer.render(screenshot: result, config: backgroundConfig)
         }
 
-        return composited
+        return result
     }
 
     // MARK: - Color Persistence

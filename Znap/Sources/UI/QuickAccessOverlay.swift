@@ -23,7 +23,6 @@ final class QuickAccessOverlay: NSPanel {
         case copyToClipboard
         case save
         case saveAs
-        case pin
         case dismiss
     }
 
@@ -180,9 +179,6 @@ final class QuickAccessOverlay: NSPanel {
         case .saveAs:
             // TODO: wire up NSSavePanel
             break
-        case .pin:
-            let _ = PinnedScreenshotPanel(image: image)
-            animateOut()
         }
     }
 
@@ -199,9 +195,11 @@ final class QuickAccessOverlay: NSPanel {
     /// Saves the captured image as a PNG file on the user's Desktop
     /// with a timestamp filename: "Znap-yyyy-MM-dd-HHmmss.png".
     private func saveToDesktop() {
-        guard let tiffData = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return
+        }
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
             return
         }
 

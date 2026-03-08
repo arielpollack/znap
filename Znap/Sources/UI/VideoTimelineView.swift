@@ -252,22 +252,47 @@ final class VideoTimelineView: NSView {
         context.restoreGState()
     }
 
-    /// Draws yellow vertical lines at each split point (segment boundary).
+    /// Draws draggable trim handles at each split point (segment boundary).
     private func drawSplitMarkers(in strip: NSRect) {
         guard segments.count > 1 else { return }
 
-        NSColor.yellow.setFill()
-
-        // Draw markers at internal boundaries (skip the first start and last end).
         for i in 1..<segments.count {
             let x = xForTime(segments[i].startTime)
+
+            // Yellow vertical line
             let markerRect = NSRect(
                 x: x - splitMarkerWidth / 2,
                 y: strip.minY,
                 width: splitMarkerWidth,
                 height: strip.height
             )
+            NSColor.yellow.setFill()
             markerRect.fill()
+
+            // Draw a small handle indicator (pill shape) at the center of the marker
+            let handleWidth: CGFloat = 10
+            let handleHeight: CGFloat = 22
+            let handleRect = NSRect(
+                x: x - handleWidth / 2,
+                y: strip.midY - handleHeight / 2,
+                width: handleWidth,
+                height: handleHeight
+            )
+            let handlePath = NSBezierPath(roundedRect: handleRect, xRadius: 3, yRadius: 3)
+            NSColor.yellow.setFill()
+            handlePath.fill()
+
+            // Grip lines inside the handle
+            let lineColor = NSColor.black.withAlphaComponent(0.5)
+            lineColor.setStroke()
+            let gripPath = NSBezierPath()
+            gripPath.lineWidth = 1
+            for line in -1...1 {
+                let lineY = strip.midY + CGFloat(line) * 4
+                gripPath.move(to: NSPoint(x: x - 2, y: lineY))
+                gripPath.line(to: NSPoint(x: x + 2, y: lineY))
+            }
+            gripPath.stroke()
         }
     }
 
@@ -402,8 +427,24 @@ final class VideoTimelineView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
+    /// The index of the segment boundary being dragged (1 = boundary between seg 0 and 1).
+    /// `nil` when not dragging a boundary.
+    private var draggingBoundaryIndex: Int?
+
+    /// Hit-test threshold for grabbing a segment boundary (in points).
+    private let boundaryGrabThreshold: CGFloat = 6
+
     override func mouseDown(with event: NSEvent) {
         let location = convert(event.locationInWindow, from: nil)
+
+        // Check if clicking near a segment boundary (for per-segment trim).
+        if let boundaryIdx = hitTestBoundary(at: location.x) {
+            draggingBoundaryIndex = boundaryIdx
+            NSCursor.resizeLeftRight.push()
+            return
+        }
+
+        draggingBoundaryIndex = nil
         let time = timeForX(location.x)
 
         // Select the segment at the clicked position.
@@ -419,10 +460,66 @@ final class VideoTimelineView: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         let location = convert(event.locationInWindow, from: nil)
-        let time = timeForX(location.x)
 
+        if let boundaryIdx = draggingBoundaryIndex {
+            // Dragging a segment boundary — adjust trim.
+            let time = timeForX(location.x)
+            let leftIdx = boundaryIdx - 1
+            let rightIdx = boundaryIdx
+
+            guard leftIdx >= 0, rightIdx < segments.count else { return }
+
+            // Clamp: can't go past the left segment's start + min duration
+            // or the right segment's end - min duration.
+            let minSegDuration = 0.05
+            let minTime = segments[leftIdx].startTime + minSegDuration
+            let maxTime = segments[rightIdx].endTime - minSegDuration
+            let clampedTime = max(minTime, min(maxTime, time))
+
+            segments[leftIdx].endTime = clampedTime
+            segments[rightIdx].startTime = clampedTime
+            delegate?.timelineViewDidChangeSegments(self)
+            return
+        }
+
+        let time = timeForX(location.x)
         playheadTime = time
         delegate?.timelineView(self, didScrubTo: time)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if draggingBoundaryIndex != nil {
+            NSCursor.pop()
+            draggingBoundaryIndex = nil
+        }
+    }
+
+    /// Returns the boundary index if the x position is near a segment boundary.
+    /// Boundary index `i` is between segments[i-1] and segments[i].
+    private func hitTestBoundary(at x: CGFloat) -> Int? {
+        for i in 1..<segments.count {
+            let boundaryX = xForTime(segments[i].startTime)
+            if abs(x - boundaryX) <= boundaryGrabThreshold {
+                return i
+            }
+        }
+        return nil
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        guard segments.count > 1 else { return }
+        let strip = filmstripRect
+        for i in 1..<segments.count {
+            let x = xForTime(segments[i].startTime)
+            let cursorRect = NSRect(
+                x: x - boundaryGrabThreshold,
+                y: strip.minY,
+                width: boundaryGrabThreshold * 2,
+                height: strip.height
+            )
+            addCursorRect(cursorRect, cursor: .resizeLeftRight)
+        }
     }
 
     // MARK: - Public Editing API

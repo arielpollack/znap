@@ -162,11 +162,11 @@ final class RecordingService: NSObject, ObservableObject {
         }
 
         writer.startWriting()
-        writer.startSession(atSourceTime: .zero)
+        // Session start time is deferred to the first sample buffer
         assetWriter = writer
 
         // 6. Create stream output handler
-        let handler = StreamOutputHandler(service: self)
+        let handler = StreamOutputHandler(writer: writer, videoInput: vInput, audioInput: audioInput)
         streamOutput = handler
 
         // 7. Create and start SCStream
@@ -239,6 +239,7 @@ final class RecordingService: NSObject, ObservableObject {
     func togglePause() {
         guard isRecording else { return }
         isPaused.toggle()
+        streamOutput?.paused = isPaused
 
         if isPaused {
             stopElapsedTimer()
@@ -268,16 +269,21 @@ final class RecordingService: NSObject, ObservableObject {
     /// Helper class conforming to `SCStreamOutput` that receives sample buffers from ScreenCaptureKit
     /// and appends them to the AVAssetWriter inputs.
     ///
-    /// The `stream(_:didOutputSampleBuffer:of:)` method is called from a non-main queue,
-    /// so it is marked `nonisolated`. It dispatches back to the main actor to check
-    /// RecordingService state (isPaused, input readiness).
-    final class StreamOutputHandler: NSObject, SCStreamOutput {
-        private weak var service: RecordingService?
+    /// Sample buffers must be processed synchronously on the callback queue — dispatching
+    /// them to another queue risks the buffer being recycled before it is written.
+    /// The session start time is set from the first received sample.
+    final class StreamOutputHandler: NSObject, SCStreamOutput, @unchecked Sendable {
+        private let writer: AVAssetWriter
+        private let videoInput: AVAssetWriterInput
+        private let audioInput: AVAssetWriterInput?
         private var sessionStarted = false
-        private var firstSampleTime: CMTime?
+        /// Set from the main actor to pause/resume sample buffer processing.
+        var paused = false
 
-        init(service: RecordingService) {
-            self.service = service
+        init(writer: AVAssetWriter, videoInput: AVAssetWriterInput, audioInput: AVAssetWriterInput?) {
+            self.writer = writer
+            self.videoInput = videoInput
+            self.audioInput = audioInput
             super.init()
         }
 
@@ -286,26 +292,33 @@ final class RecordingService: NSObject, ObservableObject {
             didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
             of type: SCStreamOutputType
         ) {
-            guard sampleBuffer.isValid else { return }
+            guard sampleBuffer.isValid,
+                  !paused,
+                  writer.status == .writing else { return }
 
-            let service = self.service
-            Task { @MainActor in
-                guard let service = service else { return }
-                guard !service.isPaused else { return }
-                guard service.assetWriter?.status == .writing else { return }
+            // Skip non-video screen buffers (status/idle frames with no image data)
+            if type == .screen {
+                guard CMSampleBufferGetImageBuffer(sampleBuffer) != nil else { return }
+            }
 
-                switch type {
-                case .screen:
-                    if let videoInput = service.videoInput, videoInput.isReadyForMoreMediaData {
-                        videoInput.append(sampleBuffer)
-                    }
-                case .audio, .microphone:
-                    if let audioInput = service.audioInput, audioInput.isReadyForMoreMediaData {
-                        audioInput.append(sampleBuffer)
-                    }
-                @unknown default:
-                    break
+            // Start the writer session at the first sample's presentation time.
+            if !sessionStarted {
+                let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                writer.startSession(atSourceTime: pts)
+                sessionStarted = true
+            }
+
+            switch type {
+            case .screen:
+                if videoInput.isReadyForMoreMediaData {
+                    videoInput.append(sampleBuffer)
                 }
+            case .audio, .microphone:
+                if let audioInput, audioInput.isReadyForMoreMediaData {
+                    audioInput.append(sampleBuffer)
+                }
+            @unknown default:
+                break
             }
         }
     }

@@ -64,6 +64,12 @@ enum VideoExportService {
         let audioTracks = try await asset.loadTracks(withMediaType: .audio)
         let sourceAudioTrack = audioTracks.first
 
+        // The source video's time range may not start at zero (ScreenCaptureKit uses
+        // mach-time-based presentation timestamps). We need to offset segment times
+        // to match the source track's actual time range.
+        let trackTimeRange = try await sourceVideoTrack.load(.timeRange)
+        let sourceStart = trackTimeRange.start
+
         // Build composition
         let composition = AVMutableComposition()
 
@@ -84,11 +90,18 @@ enum VideoExportService {
 
         // Insert each non-deleted segment
         var insertionTime = CMTime.zero
+        let trackEnd = sourceStart + trackTimeRange.duration
 
         for segment in segments where !segment.deleted {
-            let startCMTime = CMTime(seconds: segment.startTime, preferredTimescale: 600)
-            let endCMTime = CMTime(seconds: segment.endTime, preferredTimescale: 600)
+            // Offset by source track start time since segments use 0-based times.
+            // Clamp to the source track's valid range to avoid floating-point overshoot
+            // from the CMTime -> Double -> CMTime round-trip.
+            let rawStart = CMTime(seconds: segment.startTime, preferredTimescale: 600) + sourceStart
+            let rawEnd = CMTime(seconds: segment.endTime, preferredTimescale: 600) + sourceStart
+            let startCMTime = CMTimeMaximum(CMTimeMinimum(rawStart, trackEnd), sourceStart)
+            let endCMTime = CMTimeMaximum(CMTimeMinimum(rawEnd, trackEnd), sourceStart)
             let duration = endCMTime - startCMTime
+            guard duration.seconds > 0 else { continue }
             let sourceRange = CMTimeRange(start: startCMTime, duration: duration)
 
             // Insert video
