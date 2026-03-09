@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// A floating NSPanel that hosts the annotation editor for a captured screenshot.
+/// An NSWindow that hosts the annotation editor for a captured screenshot.
 ///
-/// Call ``open(with:)`` to create and display the window. The panel is titled,
-/// closable, resizable, and miniaturizable.
-final class AnnotationEditorWindow: NSPanel {
+/// Call ``open(with:)`` to create and display the window. The window is titled,
+/// closable, resizable, and miniaturizable. Using NSWindow (not NSPanel) ensures
+/// the editor appears in CMD+TAB and stays visible when switching apps.
+final class AnnotationEditorWindow: NSWindow {
 
     // MARK: - Static State
 
@@ -60,7 +61,6 @@ final class AnnotationEditorWindow: NSPanel {
 
         title = "Znap \u{2014} Annotate"
         isReleasedWhenClosed = false
-        hidesOnDeactivate = false
         animationBehavior = .documentWindow
 
         let editorView = AnnotationEditorView(image: image, windowTitle: windowTitle)
@@ -77,6 +77,13 @@ final class AnnotationEditorWindow: NSPanel {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    override func close() {
+        super.close()
+        Self.current = nil
+        // Revert to accessory (menu-bar-only) when the editor is closed.
+        NSApp.setActivationPolicy(.accessory)
+    }
 
     // MARK: - Keyboard Shortcuts
 
@@ -165,6 +172,9 @@ final class AnnotationEditorWindow: NSPanel {
     static func open(with image: NSImage, windowTitle: String = "") {
         // Close the previous editor if one is open.
         current?.close()
+
+        // Show in Dock & CMD+TAB while the editor is open.
+        NSApp.setActivationPolicy(.regular)
 
         let window = AnnotationEditorWindow(image: image, windowTitle: windowTitle)
         current = window
