@@ -3,6 +3,7 @@ import AppKit
 
 /// A lightweight, non-activating floating HUD that displays a brief message
 /// and fades out automatically.
+@MainActor
 final class ToastPanel: NSPanel {
     private static var current: ToastPanel?
 
@@ -69,7 +70,7 @@ final class ToastPanel: NSPanel {
 
     /// Shows a toast message that auto-dismisses after the given duration.
     static func show(_ message: String, icon: String? = nil, duration: TimeInterval = 1.5) {
-        current?.close()
+        current?.orderOut(nil)
 
         let panel = ToastPanel(message: message, icon: icon)
         current = panel
@@ -85,7 +86,7 @@ final class ToastPanel: NSPanel {
                     ctx.duration = 0.3
                     panel.animator().alphaValue = 0
                 }) {
-                    panel.close()
+                    panel.orderOut(nil)
                     if Self.current === panel { Self.current = nil }
                 }
             }
