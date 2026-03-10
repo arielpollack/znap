@@ -3,7 +3,6 @@ import Carbon
 import CoreText
 import ScreenCaptureKit
 import Sparkle
-import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
@@ -242,33 +241,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         pasteboard.clearContents()
                         pasteboard.setString(text, forType: .string)
 
-                        // Show notification
-                        self.showOCRNotification(text: text)
+                        // Show toast feedback
+                        if text.isEmpty {
+                            ToastPanel.show("No text found", icon: "text.magnifyingglass")
+                        } else {
+                            ToastPanel.show("Copied to clipboard", icon: "doc.on.clipboard")
+                        }
                     }
                 } catch {
                     print("OCR capture failed: \(error)")
                 }
             }
         }
-    }
-
-    private func showOCRNotification(text: String) {
-        let content = UNMutableNotificationContent()
-        content.title = "Znap OCR"
-        if text.isEmpty {
-            content.body = "No text found in selection."
-        } else {
-            let preview = text.prefix(100)
-            content.body = "Copied to clipboard: \(preview)\(text.count > 100 ? "..." : "")"
-        }
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
-        )
-        UNUserNotificationCenter.current().add(request)
     }
 
     func startScrollCapture() {
