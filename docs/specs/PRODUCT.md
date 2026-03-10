@@ -47,6 +47,8 @@ The aesthetic polish and reliability of CleanShot X with built-in video editing,
 | Copy to clipboard | Done | One-click copy from QAO or editor |
 | Save to file | Done | Save panel with PNG/JPEG format choice |
 | Open in editor | Done | Opens annotation editor for markup |
+| Destination modifiers | Done | Option=save to disk, Ctrl=copy to clipboard, Shift=open editor |
+| Toast HUD feedback | Done | Lightweight non-activating toast for OCR, save, copy confirmations |
 
 ### Annotation Editor
 
@@ -85,6 +87,7 @@ The aesthetic polish and reliability of CleanShot X with built-in video editing,
 | Timeline with segments | Done | Visual filmstrip with draggable split markers |
 | Per-segment delete | Done | Mark segments as deleted |
 | Video export | Done | Re-export edited video via AVMutableComposition |
+| GIF export | Done | Export recording as GIF with configurable frame rate (5-15 fps) |
 | System audio capture | Done | Captures system audio via ScreenCaptureKit |
 
 ### Utilities
@@ -95,7 +98,7 @@ The aesthetic polish and reliability of CleanShot X with built-in video editing,
 | History service | Done | Persists captures with metadata, auto-cleanup |
 | Hotkey service | Done | Global keyboard shortcuts via Carbon API (customizable per-mode) |
 | Desktop icon manager | Done | Hide/show desktop icons programmatically |
-| GIF encoder | Done | Utility for GIF encoding (not yet wired to UI) |
+| GIF encoder | Done | GIF encoding, wired to video editor for export |
 | Image stitcher | Done | Stitches scroll capture frames |
 | Image filters | Done | Pixelate, blur, spotlight CIFilter wrappers |
 | Path smoothing | Done | Ramer-Douglas-Peucker simplification for freehand paths |
@@ -116,6 +119,7 @@ The aesthetic polish and reliability of CleanShot X with built-in video editing,
 | Auto-open editor | false | Skip QAO, go straight to editor |
 | Recording FPS | 30 | Frames per second |
 | Recording format | MP4 | Output format |
+| GIF frame rate | 10 fps | Frames per second for GIF export (5/10/15) |
 | Per-mode hotkeys | Cmd+Shift+{1-8,R} | Customizable keyboard shortcuts per capture mode |
 
 ---
@@ -149,7 +153,8 @@ The aesthetic polish and reliability of CleanShot X with built-in video editing,
 - **AnnotationRenderer** — CoreGraphics-based final image compositing
 - **AnnotationHitTesting** — Hit detection for selection/manipulation
 - **BackgroundToolView** — Background/wallpaper configuration UI
-- **VideoEditorPanel** — NSPanel hosting video editor
+- **ToastPanel** — Lightweight non-activating floating HUD for transient messages
+- **VideoEditorPanel** — NSPanel hosting video editor with GIF export
 - **VideoTimelineView** — NSView timeline with filmstrip and split markers
 - **RecordingIndicatorPanel** — Floating recording status pill
 - **AllInOneHUD** — Radial mode selector

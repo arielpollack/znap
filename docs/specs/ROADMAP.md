@@ -26,11 +26,11 @@
 | # | Feature | Why | Difficulty | Spec Status |
 |---|---------|-----|------------|-------------|
 | 1 | Per-mode global hotkey customization | Dealbreaker for power users — need separate shortcuts per mode | Medium | Done |
-| 2 | Hide desktop icons toggle before capture | CleanShot's #1 loved feature — DesktopIconManager exists, needs UI wiring | Easy | Not started |
-| 3 | GIF export from recordings | Shottr users' #1 want — GIFEncoder exists, needs UI wiring | Medium | Not started |
-| 4 | Instant OCR-only shortcut (text to clipboard, no image) | Unique differentiator — OCRService exists, needs dedicated flow | Easy | Not started |
-| 5 | Destination modifiers (Option=desktop, Ctrl=clipboard) | Zero-friction workflow for power users | Medium | Not started |
-| 6 | Custom window shadow control (on/off/intensity) | Presentation quality — preference exists but limited | Easy | Not started |
+| 2 | Hide desktop icons toggle before capture | CleanShot's #1 loved feature — DesktopIconManager exists, needs UI wiring | Easy | Done |
+| 3 | GIF export from recordings | Shottr users' #1 want — GIFEncoder exists, needs UI wiring | Medium | Done |
+| 4 | Instant OCR toast (text to clipboard, no image) | Unique differentiator — OCRService exists, needs dedicated flow | Easy | Done |
+| 5 | Destination modifiers (Option=desktop, Ctrl=clipboard) | Zero-friction workflow for power users | Medium | Done |
+| 6 | Window shadow quick toggle in menu bar | Presentation quality — preference exists but not in menu | Easy | Done |
 
 ### Tier 2 — Differentiation (v0.3)
 
@@ -57,7 +57,16 @@
 
 ## Version History
 
-### v0.1.0 (Current)
+### v0.2.0 (Current)
+- Per-mode customizable keyboard shortcuts with recorder UI
+- Auto-hide desktop icons during capture
+- GIF export from video editor (configurable 5-15 fps)
+- Instant OCR toast feedback (replaces system notification)
+- Destination modifiers: Option=save, Ctrl=copy, Shift=edit
+- Window shadow quick toggle in menu bar
+- ToastPanel shared HUD component
+
+### v0.1.0
 - Area, fullscreen, window, freeze capture
 - Scrolling capture with auto-stitch
 - OCR text extraction

@@ -23,6 +23,8 @@
 - screenshot annotation mac
 - video trim split mac
 - custom keyboard shortcuts mac
+- screen recording to GIF mac
+- hide desktop icons screenshot
 
 ### Competitor Keywords to Target
 - cleanshot alternative
@@ -33,7 +35,7 @@
 ## Keyword Field (100 chars max)
 
 ```
-screenshot,screen capture,recording,annotate,markup,OCR,blur,pixelate,snip,scrolling,video editor
+screenshot,screen capture,recording,annotate,markup,OCR,blur,pixelate,snip,scrolling,GIF,shortcuts
 ```
 
 ## Subtitle Options (30 chars max)

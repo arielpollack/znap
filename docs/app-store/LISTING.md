@@ -28,6 +28,7 @@ Znap is a powerful, lightweight screenshot and screen recording tool for macOS. 
 - High-quality screen recording with system audio
 - Pause and resume recordings
 - Built-in video editor with trim, split, and segment deletion
+- Export recordings as GIF with configurable frame rate
 - Visual timeline with draggable split markers
 
 **Annotate Like a Pro**
@@ -43,6 +44,11 @@ Znap is a powerful, lightweight screenshot and screen recording tool for macOS. 
 - Optional macOS window header with traffic lights
 - Aspect ratio presets (16:9, 4:3, 1:1, etc.)
 
+**Power User Features**
+- Destination modifiers: hold Option to save, Ctrl to copy, Shift to edit
+- Auto-hide desktop icons before capture for clean screenshots
+- Window shadow toggle in menu bar for quick access
+
 **Fast & Lightweight**
 - Lives in your menu bar — no dock clutter
 - Instant access with customizable global keyboard shortcuts
@@ -51,16 +57,16 @@ Znap is a powerful, lightweight screenshot and screen recording tool for macOS. 
 
 ## Keywords
 
-screenshot, screen capture, screen recording, annotate, markup, OCR, text recognition, scrolling capture, blur, pixelate, record screen, video editor, menu bar, productivity, snip
+screenshot, screen capture, screen recording, annotate, markup, OCR, text recognition, scrolling capture, blur, pixelate, record screen, video editor, menu bar, GIF, snip
 
 ## What's New (Current Version)
 
-- New vibrant app icon
-- Annotation editor now appears in CMD+TAB app switcher
-- Fixed: blur, pixelate, and spotlight filters now compose correctly
-- Fixed: image orientation when saving with filter annotations
-- Fixed: video export with precise segment timing
-- Built-in video editor with timeline, trim, and split
+- Customizable per-mode keyboard shortcuts with built-in recorder
+- GIF export from video editor with configurable frame rate
+- Destination modifiers: Option=save, Ctrl=copy, Shift=edit
+- Auto-hide desktop icons during capture
+- Window shadow quick toggle in menu bar
+- Instant OCR feedback with lightweight toast HUD
 
 ## Screenshots
 
