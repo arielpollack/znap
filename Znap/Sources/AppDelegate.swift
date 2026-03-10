@@ -147,27 +147,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return app.localizedName ?? ""
     }
 
-    /// Shows the captured image — either in the annotation editor (if autoOpenEditor
-    /// is enabled) or in the Quick Access Overlay thumbnail.
-    private func showCaptureResult(_ nsImage: NSImage, type: String = "area", windowTitle: String = "") {
+    /// Routes a captured image based on modifier keys held during capture.
+    /// - No modifier: Quick Access Overlay (default)
+    /// - Option: Save to default save location + toast
+    /// - Control: Copy to clipboard + toast
+    /// - Shift: Open annotation editor
+    private func showCaptureResult(_ nsImage: NSImage, type: String = "area", windowTitle: String = "", modifiers: NSEvent.ModifierFlags = []) {
         HistoryService.shared.addCapture(type: type, image: nsImage)
-        if UserDefaults.standard.bool(forKey: "autoOpenEditor") {
+
+        if modifiers.contains(.option) {
+            // Save directly to default save location
+            let prefs = ZnapPreferences()
+            let dir = NSString(string: prefs.defaultSaveLocation).expandingTildeInPath
+            let filename = "Znap-\(Self.timestampString()).png"
+            let url = URL(fileURLWithPath: dir).appendingPathComponent(filename)
+            if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                let bitmap = NSBitmapImageRep(cgImage: cgImage)
+                if let data = bitmap.representation(using: .png, properties: [:]) {
+                    try? data.write(to: url, options: .atomic)
+                }
+            }
+            Task { @MainActor in ToastPanel.show("Saved to \(dir)", icon: "arrow.down.doc") }
+        } else if modifiers.contains(.control) {
+            // Copy to clipboard
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.writeObjects([nsImage])
+            Task { @MainActor in ToastPanel.show("Copied to clipboard", icon: "doc.on.clipboard") }
+        } else if modifiers.contains(.shift) {
+            // Open editor directly
+            AnnotationEditorWindow.open(with: nsImage, windowTitle: windowTitle)
+        } else if UserDefaults.standard.bool(forKey: "autoOpenEditor") {
             AnnotationEditorWindow.open(with: nsImage, windowTitle: windowTitle)
         } else {
             QuickAccessOverlay.show(image: nsImage, windowTitle: windowTitle)
         }
     }
 
+    private static func timestampString() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd-HHmmss"
+        return formatter.string(from: Date())
+    }
+
     func startAreaCapture() {
         let windowTitle = Self.frontmostWindowName()
         OverlayWindow.beginAreaSelection { rect in
             guard let rect = rect else { return }
+            let modifiers = NSEvent.modifierFlags
             Task {
                 do {
                     let cgImage = try await CaptureService.shared.captureArea(rect)
                     let nsImage = Self.nsImage(from: cgImage)
                     await MainActor.run {
-                        self.showCaptureResult(nsImage, windowTitle: windowTitle)
+                        self.showCaptureResult(nsImage, windowTitle: windowTitle, modifiers: modifiers)
                     }
                 } catch {
                     print("Capture failed: \(error)")
@@ -178,12 +211,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func startFullscreenCapture() {
         let windowTitle = Self.frontmostWindowName()
+        let modifiers = NSEvent.modifierFlags
         Task {
             do {
                 let cgImage = try await CaptureService.shared.captureFullscreen()
                 let nsImage = Self.nsImage(from: cgImage)
                 await MainActor.run {
-                    self.showCaptureResult(nsImage, type: "fullscreen", windowTitle: windowTitle)
+                    self.showCaptureResult(nsImage, type: "fullscreen", windowTitle: windowTitle, modifiers: modifiers)
                 }
             } catch {
                 print("Capture failed: \(error)")
@@ -195,12 +229,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windowTitle = Self.frontmostWindowName()
         WindowHighlightOverlay.beginWindowSelection { windowID in
             guard let windowID = windowID else { return }
+            let modifiers = NSEvent.modifierFlags
             Task {
                 do {
                     let cgImage = try await CaptureService.shared.captureWindow(windowID)
                     let nsImage = Self.nsImage(from: cgImage)
                     await MainActor.run {
-                        self.showCaptureResult(nsImage, type: "window", windowTitle: windowTitle)
+                        self.showCaptureResult(nsImage, type: "window", windowTitle: windowTitle, modifiers: modifiers)
                     }
                 } catch {
                     print("Window capture failed: \(error)")
@@ -213,12 +248,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windowTitle = Self.frontmostWindowName()
         FreezeScreenOverlay.beginFrozenCapture { rect in
             guard let rect = rect else { return }
+            let modifiers = NSEvent.modifierFlags
             Task {
                 do {
                     let cgImage = try await CaptureService.shared.captureArea(rect)
                     let nsImage = Self.nsImage(from: cgImage)
                     await MainActor.run {
-                        self.showCaptureResult(nsImage, type: "freeze", windowTitle: windowTitle)
+                        self.showCaptureResult(nsImage, type: "freeze", windowTitle: windowTitle, modifiers: modifiers)
                     }
                 } catch {
                     print("Freeze capture failed: \(error)")
