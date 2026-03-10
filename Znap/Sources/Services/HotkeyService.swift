@@ -31,6 +31,9 @@ final class HotkeyService {
     /// Dictionary mapping hotkey IDs to their Hotkey structs.
     private(set) var hotkeys: [UInt32: Hotkey] = [:]
 
+    /// Dictionary mapping hotkey IDs to their Carbon EventHotKeyRef for unregistration.
+    private var hotkeyRefs: [UInt32: EventHotKeyRef] = [:]
+
     /// Reference to the installed Carbon event handler.
     private var eventHandlerRef: EventHandlerRef?
 
@@ -70,9 +73,23 @@ final class HotkeyService {
 
         if status != noErr {
             NSLog("HotkeyService: Failed to register hotkey (id=\(id), status=\(status))")
+        } else if let hotkeyRef {
+            hotkeyRefs[id] = hotkeyRef
         }
 
         return id
+    }
+
+    /// Unregisters all currently registered hotkeys.
+    func unregisterAll() {
+        for (id, ref) in hotkeyRefs {
+            let status = UnregisterEventHotKey(ref)
+            if status != noErr {
+                NSLog("HotkeyService: Failed to unregister hotkey (id=\(id), status=\(status))")
+            }
+        }
+        hotkeys.removeAll()
+        hotkeyRefs.removeAll()
     }
 
     // MARK: - Carbon Event Handler

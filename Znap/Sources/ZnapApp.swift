@@ -7,24 +7,24 @@ struct ZnapApp: App {
     var body: some Scene {
         MenuBarExtra("Znap", systemImage: "camera.viewfinder") {
             // All-In-One
-            Button("All-In-One (\u{2318}\u{21e7}1)") { appDelegate.showAllInOne() }
+            Button("All-In-One (\(menuShortcut(.allInOne)))") { appDelegate.showAllInOne() }
 
             Divider()
 
             // Capture modes
-            Button("Capture Area (\u{2318}\u{21e7}4)") { appDelegate.startAreaCapture() }
-            Button("Capture Fullscreen (\u{2318}\u{21e7}3)") { appDelegate.startFullscreenCapture() }
-            Button("Capture Window (\u{2318}\u{21e7}8)") { appDelegate.startWindowCapture() }
-            Button("Freeze & Capture (\u{2318}\u{21e7}6)") { appDelegate.startFreezeCapture() }
+            Button("Capture Area (\(menuShortcut(.area)))") { appDelegate.startAreaCapture() }
+            Button("Capture Fullscreen (\(menuShortcut(.fullscreen)))") { appDelegate.startFullscreenCapture() }
+            Button("Capture Window (\(menuShortcut(.window)))") { appDelegate.startWindowCapture() }
+            Button("Freeze & Capture (\(menuShortcut(.freeze)))") { appDelegate.startFreezeCapture() }
 
             Divider()
 
-            Button("OCR Text (\u{2318}\u{21e7}2)") { appDelegate.startOCRCapture() }
-            Button("Scrolling Capture (\u{2318}\u{21e7}7)") { appDelegate.startScrollCapture() }
+            Button("OCR Text (\(menuShortcut(.ocr)))") { appDelegate.startOCRCapture() }
+            Button("Scrolling Capture (\(menuShortcut(.scroll)))") { appDelegate.startScrollCapture() }
 
             Divider()
 
-            Button("Record Screen (\u{2318}\u{21e7}R)") { appDelegate.toggleRecording() }
+            Button("Record Screen (\(menuShortcut(.record)))") { appDelegate.toggleRecording() }
 
             Divider()
 
@@ -92,6 +92,11 @@ struct ZnapApp: App {
         Settings {
             EmptyView()
         }
+    }
+
+    /// Returns the display string for a capture mode's current hotkey binding.
+    private func menuShortcut(_ mode: CaptureMode) -> String {
+        ZnapPreferences().binding(for: mode).displayString
     }
 
     /// Formats a date for display in the history submenu.

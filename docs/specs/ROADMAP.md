@@ -25,7 +25,7 @@
 
 | # | Feature | Why | Difficulty | Spec Status |
 |---|---------|-----|------------|-------------|
-| 1 | Per-mode global hotkey customization | Dealbreaker for power users — need separate shortcuts per mode | Medium | Not started |
+| 1 | Per-mode global hotkey customization | Dealbreaker for power users — need separate shortcuts per mode | Medium | Done |
 | 2 | Hide desktop icons toggle before capture | CleanShot's #1 loved feature — DesktopIconManager exists, needs UI wiring | Easy | Not started |
 | 3 | GIF export from recordings | Shottr users' #1 want — GIFEncoder exists, needs UI wiring | Medium | Not started |
 | 4 | Instant OCR-only shortcut (text to clipboard, no image) | Unique differentiator — OCRService exists, needs dedicated flow | Easy | Not started |

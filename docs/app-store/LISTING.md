@@ -19,7 +19,7 @@
 Znap is a powerful, lightweight screenshot and screen recording tool for macOS. Capture, annotate, and share your screen in seconds — all from the menu bar.
 
 **Capture Everything**
-- Area, window, and fullscreen screenshots with customizable shortcuts
+- Area, window, and fullscreen screenshots with fully customizable per-mode keyboard shortcuts
 - Freeze your screen to capture precise moments
 - Scrolling capture for full-page content
 - Instant OCR — select any text on screen and copy it to clipboard
@@ -45,7 +45,7 @@ Znap is a powerful, lightweight screenshot and screen recording tool for macOS. 
 
 **Fast & Lightweight**
 - Lives in your menu bar — no dock clutter
-- Instant access with global keyboard shortcuts
+- Instant access with customizable global keyboard shortcuts
 - Appears in CMD+TAB when editing
 - Auto-update via Sparkle
 

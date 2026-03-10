@@ -93,7 +93,7 @@ The aesthetic polish and reliability of CleanShot X with built-in video editing,
 |---------|--------|-------------|
 | OCR (Vision) | Done | Text recognition from captured images |
 | History service | Done | Persists captures with metadata, auto-cleanup |
-| Hotkey service | Done | Global keyboard shortcuts via Carbon API |
+| Hotkey service | Done | Global keyboard shortcuts via Carbon API (customizable per-mode) |
 | Desktop icon manager | Done | Hide/show desktop icons programmatically |
 | GIF encoder | Done | Utility for GIF encoding (not yet wired to UI) |
 | Image stitcher | Done | Stitches scroll capture frames |
@@ -116,6 +116,7 @@ The aesthetic polish and reliability of CleanShot X with built-in video editing,
 | Auto-open editor | false | Skip QAO, go straight to editor |
 | Recording FPS | 30 | Frames per second |
 | Recording format | MP4 | Output format |
+| Per-mode hotkeys | Cmd+Shift+{1-8,R} | Customizable keyboard shortcuts per capture mode |
 
 ---
 
@@ -152,7 +153,8 @@ The aesthetic polish and reliability of CleanShot X with built-in video editing,
 - **VideoTimelineView** — NSView timeline with filmstrip and split markers
 - **RecordingIndicatorPanel** — Floating recording status pill
 - **AllInOneHUD** — Radial mode selector
-- **PreferencesWindow/View** — Settings UI
+- **ShortcutRecorderView** — Keyboard shortcut recorder for preferences
+- **PreferencesWindow/View** — Settings UI (General, Capture, Recording, Shortcuts tabs)
 
 ### Utilities
 - **BackgroundRenderer** — Renders screenshot on gradient/solid backgrounds

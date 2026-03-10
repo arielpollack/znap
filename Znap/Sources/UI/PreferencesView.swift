@@ -2,10 +2,11 @@ import SwiftUI
 
 /// The main preferences window content, displayed as a `Settings` scene.
 ///
-/// Organised into three tabs:
+/// Organised into four tabs:
 /// - **General**: Save location, launch at login, history retention.
 /// - **Capture**: Image format, quality, overlay timeout, shadows, desktop icons.
 /// - **Recording**: FPS and output format.
+/// - **Shortcuts**: Per-mode keyboard shortcut customization.
 struct PreferencesView: View {
     @StateObject private var prefs = ZnapPreferences()
 
@@ -17,8 +18,10 @@ struct PreferencesView: View {
                 .tabItem { Label("Capture", systemImage: "camera") }
             recordingTab
                 .tabItem { Label("Recording", systemImage: "record.circle") }
+            shortcutsTab
+                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
         }
-        .frame(width: 420, height: 280)
+        .frame(width: 420, height: 340)
     }
 
     // MARK: - General Tab
@@ -90,4 +93,39 @@ struct PreferencesView: View {
         }
         .padding()
     }
+
+    // MARK: - Shortcuts Tab
+
+    private var shortcutsTab: some View {
+        Form {
+            ForEach(CaptureMode.allCases, id: \.rawValue) { mode in
+                ShortcutRecorderRow(mode: mode)
+            }
+        }
+        .padding()
+    }
+}
+
+/// A single row in the Shortcuts tab that reads/writes a hotkey binding
+/// for a given capture mode and posts a notification on change.
+private struct ShortcutRecorderRow: View {
+    let mode: CaptureMode
+    @State private var binding: HotkeyBinding
+
+    init(mode: CaptureMode) {
+        self.mode = mode
+        self._binding = State(initialValue: ZnapPreferences().binding(for: mode))
+    }
+
+    var body: some View {
+        ShortcutRecorderView(mode: mode, binding: $binding)
+            .onChange(of: binding) { newValue in
+                ZnapPreferences().setBinding(newValue, for: mode)
+                NotificationCenter.default.post(name: .hotkeyBindingsChanged, object: nil)
+            }
+    }
+}
+
+extension Notification.Name {
+    static let hotkeyBindingsChanged = Notification.Name("HotkeyBindingsChanged")
 }

@@ -11,7 +11,7 @@ final class PreferencesWindow: NSPanel {
 
     private init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 280),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 340),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false

@@ -9,6 +9,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         registerCustomFonts()
         registerHotkeys()
+
+        NotificationCenter.default.addObserver(
+            forName: .hotkeyBindingsChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.reregisterHotkeys()
+        }
     }
 
     private func registerCustomFonts() {
@@ -21,62 +29,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func registerHotkeys() {
-        // Cmd+Shift+4 for area capture (kVK_ANSI_4)
-        HotkeyService.shared.register(
-            keyCode: UInt32(kVK_ANSI_4),
-            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
-            handler: { [weak self] in self?.startAreaCapture() }
-        )
+        let prefs = ZnapPreferences()
+        let handlers: [CaptureMode: () -> Void] = [
+            .allInOne:   { [weak self] in self?.showAllInOne() },
+            .area:       { [weak self] in self?.startAreaCapture() },
+            .fullscreen: { [weak self] in self?.startFullscreenCapture() },
+            .window:     { [weak self] in self?.startWindowCapture() },
+            .freeze:     { [weak self] in self?.startFreezeCapture() },
+            .ocr:        { [weak self] in self?.startOCRCapture() },
+            .scroll:     { [weak self] in self?.startScrollCapture() },
+            .record:     { [weak self] in self?.toggleRecording() },
+        ]
+        for mode in CaptureMode.allCases {
+            let binding = prefs.binding(for: mode)
+            guard let handler = handlers[mode] else { continue }
+            HotkeyService.shared.register(
+                keyCode: binding.keyCode,
+                modifiers: binding.modifiers,
+                handler: handler
+            )
+        }
+    }
 
-        // Cmd+Shift+3 for fullscreen (kVK_ANSI_3)
-        HotkeyService.shared.register(
-            keyCode: UInt32(kVK_ANSI_3),
-            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
-            handler: { [weak self] in self?.startFullscreenCapture() }
-        )
-
-        // Cmd+Shift+8 for window capture (kVK_ANSI_8)
-        // Note: Cmd+Shift+5 is reserved by macOS for the screenshot utility.
-        HotkeyService.shared.register(
-            keyCode: UInt32(kVK_ANSI_8),
-            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
-            handler: { [weak self] in self?.startWindowCapture() }
-        )
-
-        // Cmd+Shift+6 for freeze & capture (kVK_ANSI_6)
-        HotkeyService.shared.register(
-            keyCode: UInt32(kVK_ANSI_6),
-            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
-            handler: { [weak self] in self?.startFreezeCapture() }
-        )
-
-        // Cmd+Shift+R for recording toggle (kVK_ANSI_R)
-        HotkeyService.shared.register(
-            keyCode: UInt32(kVK_ANSI_R),
-            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
-            handler: { [weak self] in self?.toggleRecording() }
-        )
-
-        // Cmd+Shift+2 for OCR text recognition (kVK_ANSI_2)
-        HotkeyService.shared.register(
-            keyCode: UInt32(kVK_ANSI_2),
-            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
-            handler: { [weak self] in self?.startOCRCapture() }
-        )
-
-        // Cmd+Shift+7 for scrolling capture (kVK_ANSI_7)
-        HotkeyService.shared.register(
-            keyCode: UInt32(kVK_ANSI_7),
-            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
-            handler: { [weak self] in self?.startScrollCapture() }
-        )
-
-        // Cmd+Shift+1 for All-In-One HUD (kVK_ANSI_1)
-        HotkeyService.shared.register(
-            keyCode: UInt32(kVK_ANSI_1),
-            modifiers: UInt32(Carbon.cmdKey | Carbon.shiftKey),
-            handler: { [weak self] in self?.showAllInOne() }
-        )
+    func reregisterHotkeys() {
+        HotkeyService.shared.unregisterAll()
+        registerHotkeys()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -84,42 +61,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func showAllInOne() {
+        let prefs = ZnapPreferences()
         let modes: [AllInOneHUD.Mode] = [
             AllInOneHUD.Mode(
                 id: "area",
                 icon: "rectangle.dashed",
                 label: "Area",
-                shortcut: "\u{2318}\u{21e7}4"
+                shortcut: prefs.binding(for: .area).displayString
             ) { [weak self] in self?.startAreaCapture() },
             AllInOneHUD.Mode(
                 id: "window",
                 icon: "macwindow",
                 label: "Window",
-                shortcut: "\u{2318}\u{21e7}8"
+                shortcut: prefs.binding(for: .window).displayString
             ) { [weak self] in self?.startWindowCapture() },
             AllInOneHUD.Mode(
                 id: "full",
                 icon: "rectangle.fill",
                 label: "Full",
-                shortcut: "\u{2318}\u{21e7}3"
+                shortcut: prefs.binding(for: .fullscreen).displayString
             ) { [weak self] in self?.startFullscreenCapture() },
             AllInOneHUD.Mode(
                 id: "scroll",
                 icon: "arrow.up.and.down.text.horizontal",
                 label: "Scroll",
-                shortcut: "\u{2318}\u{21e7}7"
+                shortcut: prefs.binding(for: .scroll).displayString
             ) { [weak self] in self?.startScrollCapture() },
             AllInOneHUD.Mode(
                 id: "record",
                 icon: "record.circle",
                 label: "Record",
-                shortcut: "\u{2318}\u{21e7}R"
+                shortcut: prefs.binding(for: .record).displayString
             ) { [weak self] in self?.toggleRecording() },
             AllInOneHUD.Mode(
                 id: "ocr",
                 icon: "text.viewfinder",
                 label: "OCR",
-                shortcut: "\u{2318}\u{21e7}2"
+                shortcut: prefs.binding(for: .ocr).displayString
             ) { [weak self] in self?.startOCRCapture() },
         ]
         AllInOneHUD.show(with: modes)

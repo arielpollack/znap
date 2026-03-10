@@ -22,6 +22,7 @@
 - freeze screen capture
 - screenshot annotation mac
 - video trim split mac
+- custom keyboard shortcuts mac
 
 ### Competitor Keywords to Target
 - cleanshot alternative
