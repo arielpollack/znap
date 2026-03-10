@@ -190,20 +190,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return formatter.string(from: Date())
     }
 
+    /// Wraps a capture operation with desktop icon hide/restore if enabled.
+    private func withDesktopIconsHidden(_ operation: @escaping () -> Void) {
+        let prefs = ZnapPreferences()
+        guard prefs.autoHideDesktopIcons, !DesktopIconManager.shared.iconsHidden else {
+            operation()
+            return
+        }
+        DesktopIconManager.shared.hideIcons()
+        // Finder restart takes ~0.5s
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+            operation()
+        }
+    }
+
+    /// Restores desktop icons if they were auto-hidden for capture.
+    private func restoreDesktopIconsIfNeeded() {
+        if ZnapPreferences().autoHideDesktopIcons {
+            DesktopIconManager.shared.restoreIfNeeded()
+        }
+    }
+
     func startAreaCapture() {
         let windowTitle = Self.frontmostWindowName()
-        OverlayWindow.beginAreaSelection { rect in
-            guard let rect = rect else { return }
-            let modifiers = NSEvent.modifierFlags
-            Task {
-                do {
-                    let cgImage = try await CaptureService.shared.captureArea(rect)
-                    let nsImage = Self.nsImage(from: cgImage)
-                    await MainActor.run {
-                        self.showCaptureResult(nsImage, windowTitle: windowTitle, modifiers: modifiers)
+        withDesktopIconsHidden {
+            OverlayWindow.beginAreaSelection { rect in
+                self.restoreDesktopIconsIfNeeded()
+                guard let rect = rect else { return }
+                let modifiers = NSEvent.modifierFlags
+                Task {
+                    do {
+                        let cgImage = try await CaptureService.shared.captureArea(rect)
+                        let nsImage = Self.nsImage(from: cgImage)
+                        await MainActor.run {
+                            self.showCaptureResult(nsImage, windowTitle: windowTitle, modifiers: modifiers)
+                        }
+                    } catch {
+                        print("Capture failed: \(error)")
                     }
-                } catch {
-                    print("Capture failed: \(error)")
                 }
             }
         }
@@ -212,33 +236,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func startFullscreenCapture() {
         let windowTitle = Self.frontmostWindowName()
         let modifiers = NSEvent.modifierFlags
-        Task {
-            do {
-                let cgImage = try await CaptureService.shared.captureFullscreen()
-                let nsImage = Self.nsImage(from: cgImage)
-                await MainActor.run {
-                    self.showCaptureResult(nsImage, type: "fullscreen", windowTitle: windowTitle, modifiers: modifiers)
+        withDesktopIconsHidden {
+            Task {
+                do {
+                    let cgImage = try await CaptureService.shared.captureFullscreen()
+                    let nsImage = Self.nsImage(from: cgImage)
+                    await MainActor.run {
+                        self.restoreDesktopIconsIfNeeded()
+                        self.showCaptureResult(nsImage, type: "fullscreen", windowTitle: windowTitle, modifiers: modifiers)
+                    }
+                } catch {
+                    print("Capture failed: \(error)")
                 }
-            } catch {
-                print("Capture failed: \(error)")
             }
         }
     }
 
     func startWindowCapture() {
         let windowTitle = Self.frontmostWindowName()
-        WindowHighlightOverlay.beginWindowSelection { windowID in
-            guard let windowID = windowID else { return }
-            let modifiers = NSEvent.modifierFlags
-            Task {
-                do {
-                    let cgImage = try await CaptureService.shared.captureWindow(windowID)
-                    let nsImage = Self.nsImage(from: cgImage)
-                    await MainActor.run {
-                        self.showCaptureResult(nsImage, type: "window", windowTitle: windowTitle, modifiers: modifiers)
+        withDesktopIconsHidden {
+            WindowHighlightOverlay.beginWindowSelection { windowID in
+                self.restoreDesktopIconsIfNeeded()
+                guard let windowID = windowID else { return }
+                let modifiers = NSEvent.modifierFlags
+                Task {
+                    do {
+                        let cgImage = try await CaptureService.shared.captureWindow(windowID)
+                        let nsImage = Self.nsImage(from: cgImage)
+                        await MainActor.run {
+                            self.showCaptureResult(nsImage, type: "window", windowTitle: windowTitle, modifiers: modifiers)
+                        }
+                    } catch {
+                        print("Window capture failed: \(error)")
                     }
-                } catch {
-                    print("Window capture failed: \(error)")
                 }
             }
         }
@@ -246,18 +276,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func startFreezeCapture() {
         let windowTitle = Self.frontmostWindowName()
-        FreezeScreenOverlay.beginFrozenCapture { rect in
-            guard let rect = rect else { return }
-            let modifiers = NSEvent.modifierFlags
-            Task {
-                do {
-                    let cgImage = try await CaptureService.shared.captureArea(rect)
-                    let nsImage = Self.nsImage(from: cgImage)
-                    await MainActor.run {
-                        self.showCaptureResult(nsImage, type: "freeze", windowTitle: windowTitle, modifiers: modifiers)
+        withDesktopIconsHidden {
+            FreezeScreenOverlay.beginFrozenCapture { rect in
+                self.restoreDesktopIconsIfNeeded()
+                guard let rect = rect else { return }
+                let modifiers = NSEvent.modifierFlags
+                Task {
+                    do {
+                        let cgImage = try await CaptureService.shared.captureArea(rect)
+                        let nsImage = Self.nsImage(from: cgImage)
+                        await MainActor.run {
+                            self.showCaptureResult(nsImage, type: "freeze", windowTitle: windowTitle, modifiers: modifiers)
+                        }
+                    } catch {
+                        print("Freeze capture failed: \(error)")
                     }
-                } catch {
-                    print("Freeze capture failed: \(error)")
                 }
             }
         }
