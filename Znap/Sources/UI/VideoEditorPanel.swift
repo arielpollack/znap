@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import AVKit
+import UniformTypeIdentifiers
 
 /// An NSPanel that displays a video preview and timeline editor after a recording
 /// stops. The user can split, speed-adjust, delete segments, and export the final
@@ -28,6 +29,7 @@ final class VideoEditorPanel: NSPanel {
     private let timelineView = VideoTimelineView(frame: .zero)
     private let speedPopup = NSPopUpButton()
     private let deleteSegmentButton = NSButton()
+    private let gifButton = NSButton(title: "Export GIF", target: nil, action: nil)
     private let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
     private let saveButton = NSButton(title: "Save", target: nil, action: nil)
 
@@ -134,6 +136,11 @@ final class VideoEditorPanel: NSPanel {
         bottomBar.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(bottomBar)
 
+        gifButton.translatesAutoresizingMaskIntoConstraints = false
+        gifButton.target = self
+        gifButton.action = #selector(exportGIFAction)
+        bottomBar.addSubview(gifButton)
+
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
         cancelButton.target = self
         cancelButton.action = #selector(cancelAction)
@@ -206,6 +213,9 @@ final class VideoEditorPanel: NSPanel {
 
             cancelButton.trailingAnchor.constraint(equalTo: saveButton.leadingAnchor, constant: -8),
             cancelButton.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
+
+            gifButton.trailingAnchor.constraint(equalTo: cancelButton.leadingAnchor, constant: -8),
+            gifButton.centerYAnchor.constraint(equalTo: bottomBar.centerYAnchor),
         ])
     }
 
@@ -404,6 +414,85 @@ final class VideoEditorPanel: NSPanel {
         timelineView.toggleDeleteSelectedSegment()
     }
 
+    @objc private func exportGIFAction() {
+        guard let videoURL else { return }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.gif]
+        panel.nameFieldStringValue = "recording.gif"
+        panel.canCreateDirectories = true
+
+        panel.beginSheetModal(for: self) { [weak self] response in
+            guard let self, response == .OK, let outputURL = panel.url else { return }
+
+            self.gifButton.isEnabled = false
+            self.saveButton.isEnabled = false
+            self.cancelButton.isEnabled = false
+
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    let segments = self.timelineView.segments
+                    let composition = try await VideoExportService.buildComposition(
+                        source: videoURL, segments: segments
+                    )
+                    let fps = ZnapPreferences().gifFrameRate
+                    let frames = try await self.extractFrames(
+                        from: composition, fps: fps
+                    )
+                    let frameDelay = 1.0 / Double(fps)
+                    let success = GIFEncoder.encode(
+                        frames: frames, frameDelay: frameDelay, outputURL: outputURL
+                    )
+
+                    await MainActor.run {
+                        self.gifButton.isEnabled = true
+                        self.saveButton.isEnabled = true
+                        self.cancelButton.isEnabled = true
+
+                        if success {
+                            ToastPanel.show("GIF saved", icon: "checkmark.circle")
+                        } else {
+                            let alert = NSAlert()
+                            alert.messageText = "GIF export failed"
+                            alert.runModal()
+                        }
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.gifButton.isEnabled = true
+                        self.saveButton.isEnabled = true
+                        self.cancelButton.isEnabled = true
+                        let alert = NSAlert(error: error)
+                        alert.beginSheetModal(for: self)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Extracts CGImage frames from a composition at the given frame rate.
+    private func extractFrames(from composition: AVMutableComposition, fps: Int) async throws -> [CGImage] {
+        let generator = AVAssetImageGenerator(asset: composition)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+        generator.maximumSize = CGSize(width: 640, height: 0)
+
+        let duration = try await composition.load(.duration)
+        let totalSeconds = CMTimeGetSeconds(duration)
+        let frameCount = Int(totalSeconds * Double(fps))
+        guard frameCount > 0 else { return [] }
+
+        var frames: [CGImage] = []
+        for i in 0..<frameCount {
+            let time = CMTime(seconds: Double(i) / Double(fps), preferredTimescale: 600)
+            let (cgImage, _) = try await generator.image(at: time)
+            frames.append(cgImage)
+        }
+        return frames
+    }
+
     @objc private func cancelAction() {
         let alert = NSAlert()
         alert.messageText = "Discard Recording?"
@@ -423,6 +512,7 @@ final class VideoEditorPanel: NSPanel {
     @objc private func saveAction() {
         guard let videoURL else { return }
 
+        gifButton.isEnabled = false
         saveButton.isEnabled = false
         cancelButton.isEnabled = false
 
@@ -449,6 +539,7 @@ final class VideoEditorPanel: NSPanel {
                 }
             } catch {
                 await MainActor.run {
+                    self.gifButton.isEnabled = true
                     self.saveButton.isEnabled = true
                     self.cancelButton.isEnabled = true
 

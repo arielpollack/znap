@@ -46,4 +46,7 @@ final class ZnapPreferences: ObservableObject {
 
     /// Output format for screen recordings.
     @AppStorage("recordingFormat") var recordingFormat = "mp4"
+
+    /// Frames per second for GIF exports from the video editor.
+    @AppStorage("gifFrameRate") var gifFrameRate = 10
 }

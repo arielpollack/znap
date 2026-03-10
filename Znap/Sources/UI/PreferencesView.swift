@@ -85,6 +85,8 @@ struct PreferencesView: View {
                 Text("MP4").tag("mp4")
                 Text("MOV").tag("mov")
             }
+
+            Stepper("GIF Frame Rate: \(prefs.gifFrameRate) fps", value: $prefs.gifFrameRate, in: 5...15, step: 5)
         }
         .padding()
     }

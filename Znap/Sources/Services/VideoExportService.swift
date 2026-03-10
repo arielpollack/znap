@@ -44,16 +44,16 @@ enum VideoExportService {
 
     // MARK: - Public API
 
-    /// Export the source video with the given segment edits applied.
+    /// Builds an `AVMutableComposition` from the source video applying segment edits.
     ///
-    /// Each non-deleted segment is inserted into an `AVMutableComposition` in order.
+    /// Each non-deleted segment is inserted into the composition in order.
     /// Segments with `speed != 1.0` are time-scaled accordingly.
     ///
     /// - Parameters:
     ///   - source: URL of the source MP4 file.
     ///   - segments: Ordered list of segments describing the edit.
-    /// - Returns: URL of the exported MP4 on the Desktop.
-    static func export(source: URL, segments: [Segment]) async throws -> URL {
+    /// - Returns: A composition ready for export or frame extraction.
+    static func buildComposition(source: URL, segments: [Segment]) async throws -> AVMutableComposition {
         let asset = AVURLAsset(url: source)
 
         // Load source tracks
@@ -128,6 +128,21 @@ enum VideoExportService {
                 insertionTime = insertionTime + duration
             }
         }
+
+        return composition
+    }
+
+    /// Export the source video with the given segment edits applied.
+    ///
+    /// Each non-deleted segment is inserted into an `AVMutableComposition` in order.
+    /// Segments with `speed != 1.0` are time-scaled accordingly.
+    ///
+    /// - Parameters:
+    ///   - source: URL of the source MP4 file.
+    ///   - segments: Ordered list of segments describing the edit.
+    /// - Returns: URL of the exported MP4 on the Desktop.
+    static func export(source: URL, segments: [Segment]) async throws -> URL {
+        let composition = try await buildComposition(source: source, segments: segments)
 
         // Output URL on Desktop
         let outputURL = desktopOutputURL()
