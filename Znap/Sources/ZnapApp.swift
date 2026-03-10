@@ -41,6 +41,13 @@ struct ZnapApp: App {
                 }
             }
 
+            Button(UserDefaults.standard.bool(forKey: "includeWindowShadow")
+                ? "✓ Window Shadow"
+                : "   Window Shadow") {
+                let current = UserDefaults.standard.bool(forKey: "includeWindowShadow")
+                UserDefaults.standard.set(!current, forKey: "includeWindowShadow")
+            }
+
             Divider()
 
             // History submenu
