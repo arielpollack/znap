@@ -188,7 +188,12 @@ final class QuickAccessOverlay: NSPanel {
     private func copyImageToClipboard() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([image])
+        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            let bitmap = NSBitmapImageRep(cgImage: cgImage)
+            if let pngData = bitmap.representation(using: .png, properties: [:]) {
+                pasteboard.setData(pngData, forType: .png)
+            }
+        }
         animateOut()
     }
 

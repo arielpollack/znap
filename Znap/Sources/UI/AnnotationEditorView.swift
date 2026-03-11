@@ -387,7 +387,12 @@ struct AnnotationEditorView: View {
         guard let finalImage = renderFinalImage() else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([finalImage])
+        if let cgImage = finalImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            let bitmap = NSBitmapImageRep(cgImage: cgImage)
+            if let pngData = bitmap.representation(using: .png, properties: [:]) {
+                pasteboard.setData(pngData, forType: .png)
+            }
+        }
     }
 
     // MARK: - Save

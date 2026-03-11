@@ -147,10 +147,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             Task { @MainActor in ToastPanel.show("Saved to \(dir)", icon: "arrow.down.doc") }
         } else if modifiers.contains(.control) {
-            // Copy to clipboard
+            // Copy to clipboard as PNG (TIFF not accepted by some apps like WhatsApp)
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
-            pasteboard.writeObjects([nsImage])
+            if let cgImage = nsImage.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+                let bitmap = NSBitmapImageRep(cgImage: cgImage)
+                if let pngData = bitmap.representation(using: .png, properties: [:]) {
+                    pasteboard.setData(pngData, forType: .png)
+                }
+            }
             Task { @MainActor in ToastPanel.show("Copied to clipboard", icon: "doc.on.clipboard") }
         } else if modifiers.contains(.shift) {
             // Open editor directly
